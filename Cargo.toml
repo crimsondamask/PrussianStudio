@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+  "./prussian_studio_gui",
+]
+
