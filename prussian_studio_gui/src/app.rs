@@ -1,12 +1,19 @@
-use std::collections::BTreeMap;
+// use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
+use std::time::Duration;
 
 use crate::{
     fonts::*,
     panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel, *},
     window::*,
 };
-use egui::{global_dark_light_mode_buttons, Color32, Rounding, Window};
-use lib_device::*;
+use egui::Grid;
+use egui::{global_dark_light_mode_buttons, mutex::Mutex, Color32, ComboBox, Rounding, Window};
+pub use lib_device::Channel;
+pub use lib_device::*;
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -18,10 +25,17 @@ pub struct TemplateApp {
     #[serde(skip)]
     pub device_windows_buffer: DeviceWindowsBuffer,
     #[serde(skip)]
+    pub channel_windows_buffer: ChannelWindowsBuffer,
+    #[serde(skip)]
     pub value: f32,
     #[serde(skip)]
     pub windows_open: WindowsOpen,
-    pub devices: BTreeMap<String, Device>,
+    #[serde(skip)]
+    pub devices: Vec<Device>,
+    #[serde(skip)]
+    pub mpsc_channel: Option<(Sender<Vec<Device>>, Receiver<Vec<Device>>)>,
+    #[serde(skip)]
+    pub spawn_logging_thread: bool,
 }
 
 impl Default for TemplateApp {
@@ -29,9 +43,21 @@ impl Default for TemplateApp {
         Self {
             // Example stuff:
             device_windows_buffer: DeviceWindowsBuffer::default(),
+            channel_windows_buffer: ChannelWindowsBuffer::default(),
             value: 2.7,
             windows_open: WindowsOpen::default(),
-            devices: BTreeMap::new(),
+            devices: vec![
+                Device {
+                    name: "PLC".to_owned(),
+                    ..Default::default()
+                },
+                Device {
+                    name: "Modbus Device".to_owned(),
+                    ..Default::default()
+                },
+            ],
+            mpsc_channel: None,
+            spawn_logging_thread: false,
         }
     }
 }
@@ -44,7 +70,7 @@ impl TemplateApp {
         setup_custom_fonts(&cc.egui_ctx);
 
         let visuals = egui::Visuals {
-            dark_mode: true,
+            dark_mode: false,
             // override_text_color: Some(Color32::GRAY),
             window_rounding: Rounding {
                 nw: 7.0,
@@ -54,9 +80,9 @@ impl TemplateApp {
             },
             hyperlink_color: Color32::from_rgb(0, 142, 240),
             // faint_bg_color: Color32::from_gray(200),
-            override_text_color: Some(Color32::from_gray(200)),
-            // button_frame: false,
-            ..Default::default() // ..egui::Visuals::light()
+            // override_text_color: Some(Color32::from_gray(200)),
+            // ..Default::default()
+            ..egui::Visuals::light()
         };
         cc.egui_ctx.set_visuals(visuals);
         // Load previous app state (if any).
@@ -71,6 +97,7 @@ impl TemplateApp {
 
 impl eframe::App for TemplateApp {
     /// Called by the frame work to save state before shutdown.
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
@@ -80,9 +107,12 @@ impl eframe::App for TemplateApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self {
             device_windows_buffer,
+            channel_windows_buffer,
             value,
             windows_open,
             devices,
+            mpsc_channel,
+            spawn_logging_thread,
         } = self;
 
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
@@ -91,7 +121,13 @@ impl eframe::App for TemplateApp {
                 ui.label("powered by ");
                 ui.hyperlink_to("PrussianStudio", "https://github.com/crimsondamask");
                 ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                    ui.spacing_mut().item_spacing.x = 200.0;
                     ui.label("v0.1");
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 20.0;
+                        ui.spinner();
+                        ui.label("Status: Waiting...");
+                    });
                 });
             });
         });
@@ -103,14 +139,26 @@ impl eframe::App for TemplateApp {
                         frame.quit();
                     }
                 });
-                ui.menu_button("Edit", |ui| if ui.button("Preferences").clicked() {});
+                ui.menu_button("Edit", |ui| {
+                    if ui.button("Preferences").clicked() {
+                        windows_open.preferences = !windows_open.preferences;
+                    }
+                });
                 ui.menu_button("Devices", |ui| {
                     if ui.button("Add new device").clicked() {
                         windows_open.new_device = !windows_open.new_device;
                     }
                     ui.separator();
-                    if ui.button("Modbus").clicked() {
-                        windows_open.device = !windows_open.device;
+                    ui.menu_button("PLC", |ui| {
+                        if ui.button("Configure").clicked() {
+                            windows_open.plc = !windows_open.plc;
+                        }
+                        if ui.button("Channels").clicked() {
+                            windows_open.device_channels = !windows_open.device_channels;
+                        }
+                    });
+                    if ui.button("Modbus Device").clicked() {
+                        windows_open.modbus_device = !windows_open.modbus_device;
                     }
                 });
                 ui.menu_button("Help", |ui| if ui.button("About").clicked() {});
@@ -118,26 +166,72 @@ impl eframe::App for TemplateApp {
                     // global_dark_light_mode_buttons(ui);
                 });
             });
-            Window::new("Modbus Devices")
-                .open(&mut windows_open.device)
+            Window::new("PLC Channels")
+                .open(&mut windows_open.device_channels)
+                .scroll2([false, true])
                 .show(ctx, |ui| {
-                    egui::Grid::new("devices").show(ui, |ui| {
-                        let mut device_to_remove = String::new();
-                        for (device, value) in devices.iter() {
-                            ui.label(format!("{}    ", &device));
-                            ui.label(format!("{}", &value.config.address));
-                            if ui.small_button("Edit").clicked() {}
-                            if ui.small_button("Remove").clicked() {
-                                device_to_remove = device.to_owned();
+                    ui.label("Channel List");
+                    ui.separator();
+                    Grid::new("Channel List")
+                        .striped(true)
+                        .num_columns(4)
+                        .min_col_width(160.0)
+                        .show(ui, |ui| {
+                            if let Some(device) = &devices.iter().nth(0) {
+                                for channel in &device.channels {
+                                    ui.label(format!("CH{}", channel.id));
+                                    ui.label(format!("{}", channel.value_type));
+                                    ui.label(format!("{}", channel.access_type));
+                                    if ui.small_button("Configure").clicked() {
+                                        channel_windows_buffer.selected_channel = channel.clone();
+                                        windows_open.channel_config = !windows_open.channel_config;
+                                    }
+                                    ui.end_row();
+                                }
                             }
+                        });
+                });
+            Window::new("Preferences")
+                .open(&mut windows_open.preferences)
+                .show(ctx, |ui| {
+                    ctx.settings_ui(ui);
+                });
+            Window::new("Channel Configuration")
+                .open(&mut windows_open.channel_config)
+                .show(ctx, |ui| {
+                    ui.label(format!(
+                        "{} configuration",
+                        channel_windows_buffer.selected_channel
+                    ));
+                    ui.separator();
+                    egui::Grid::new("Channel config")
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            ui.label("Index");
+                            ui.text_edit_singleline(&mut device_windows_buffer.name);
                             ui.end_row();
+                            ui.label("IP address:");
+                            ui.text_edit_singleline(&mut device_windows_buffer.address);
+                            ui.end_row();
+                            ui.label("Port:");
+                            ui.text_edit_singleline(&mut device_windows_buffer.port);
+                            ui.end_row();
+                        });
+                    ui.vertical_centered_justified(|ui| {
+                        if ui.button("Save").clicked() {
+                            if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
+                                devices[0].name = device_windows_buffer.name.clone();
+                                devices[0].config.address = device_windows_buffer.address.clone();
+                                devices[0].config.port = port;
+                            }
                         }
-                        if let Some(_) = devices.remove(&device_to_remove) {}
                     });
                 });
-            Window::new("Add Device")
-                .open(&mut windows_open.new_device)
+            Window::new("PLC")
+                .open(&mut windows_open.plc)
                 .show(ctx, |ui| {
+                    ui.label("Configuration");
+                    ui.separator();
                     egui::Grid::new("add_device").num_columns(2).show(ui, |ui| {
                         ui.label("Device name:");
                         ui.text_edit_singleline(&mut device_windows_buffer.name);
@@ -150,28 +244,22 @@ impl eframe::App for TemplateApp {
                         ui.end_row();
                     });
                     ui.vertical_centered_justified(|ui| {
-                        if ui.button("Add").clicked() {
+                        if ui.button("Save").clicked() {
                             if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
-                                let device_name = &device_windows_buffer.name;
-                                let address = &device_windows_buffer.address;
-                                let port = port;
-                                let config = DeviceConfig {
-                                    address: address.to_owned(),
-                                    port,
-                                };
-                                let channels = Vec::new();
-                                let device = Device::new(
-                                    device_name.to_owned(),
-                                    DeviceType::Modbus,
-                                    config,
-                                    channels,
-                                );
-
-                                devices.insert(device_name.to_owned(), device);
-                            };
+                                devices[0].name = device_windows_buffer.name.clone();
+                                devices[0].config.address = device_windows_buffer.address.clone();
+                                devices[0].config.port = port;
+                            }
                         }
                     });
                 });
+            Window::new("Modbus Device")
+                .open(&mut windows_open.modbus_device)
+                .scroll2([false, true])
+                .show(ctx, |ui| {});
+            Window::new("Add Device")
+                .open(&mut windows_open.new_device)
+                .show(ctx, |ui| {});
         });
 
         right_panel(ctx, &self);

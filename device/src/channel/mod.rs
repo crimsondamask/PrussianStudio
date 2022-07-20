@@ -1,21 +1,23 @@
 // use std::error::Error;
 
+use std::fmt::{write, Display};
+
 use serde::{Deserialize, Serialize};
 use tokio_modbus::prelude::{sync::Context, *};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum ValueType {
     Int16,
     Real32,
     BoolType,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum AccessType {
     Read,
     Write,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Channel {
     pub id: usize,
     pub value_type: ValueType,
@@ -38,12 +40,12 @@ impl Channel {
     pub fn read_value(&mut self, ctx: &mut Context) {
         match self.value_type {
             ValueType::Int16 => {
-                if let Ok(value) = ctx.read_input_registers(self.index, 1) {
+                if let Ok(value) = ctx.read_holding_registers(self.index, 1) {
                     self.value = value[0] as f32;
                 }
             }
             ValueType::Real32 => {
-                if let Ok(data) = ctx.read_input_registers(self.index, 2) {
+                if let Ok(data) = ctx.read_holding_registers(self.index, 2) {
                     let data_32bit_rep = ((data[0] as u32) << 16) | data[1] as u32;
                     let data_32_array = data_32bit_rep.to_ne_bytes();
                     self.value = f32::from_ne_bytes(data_32_array);
@@ -70,5 +72,42 @@ impl Default for Channel {
             value: 0.0,
             index: 0,
         }
+    }
+}
+
+impl Display for Channel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CH{}", self.id)
+    }
+}
+impl Display for ValueType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value_type = match self {
+            ValueType::Int16 => "Int",
+            ValueType::Real32 => "Real",
+            ValueType::BoolType => "Bool",
+        };
+        write!(f, "{}", value_type)
+    }
+}
+
+impl Display for AccessType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let access_type = match self {
+            AccessType::Read => "Read",
+            AccessType::Write => "Write",
+        };
+        write!(f, "{}", access_type)
+    }
+}
+
+impl Default for ValueType {
+    fn default() -> Self {
+        ValueType::Int16
+    }
+}
+impl Default for AccessType {
+    fn default() -> Self {
+        AccessType::Read
     }
 }
