@@ -22,7 +22,5 @@ pub struct DeviceWindowsBuffer {
 pub struct ChannelWindowsBuffer {
     pub selected_device: Device,
     pub selected_channel: Channel,
-    pub index: String,
-    pub value_type: ValueType,
-    pub access_type: AccessType,
+    pub edited_channel: Channel,
 }

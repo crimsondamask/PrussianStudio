@@ -10,8 +10,8 @@ use crate::{
     panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel, *},
     window::*,
 };
-use egui::Grid;
 use egui::{global_dark_light_mode_buttons, mutex::Mutex, Color32, ComboBox, Rounding, Window};
+use egui::{Grid, Slider};
 pub use lib_device::Channel;
 pub use lib_device::*;
 
@@ -170,18 +170,28 @@ impl eframe::App for TemplateApp {
                 .open(&mut windows_open.device_channels)
                 .scroll2([false, true])
                 .show(ctx, |ui| {
-                    ui.label("Channel List");
-                    ui.separator();
                     Grid::new("Channel List")
                         .striped(true)
-                        .num_columns(4)
+                        .num_columns(6)
                         .min_col_width(160.0)
                         .show(ui, |ui| {
                             if let Some(device) = &devices.iter().nth(0) {
+                                ui.label("Channel");
+                                ui.label("Value");
+                                ui.label("Value type");
+                                ui.label("Access");
+                                ui.label("Address");
+                                ui.end_row();
+                                for _ in 0..6 {
+                                    ui.separator();
+                                }
+                                ui.end_row();
                                 for channel in &device.channels {
                                     ui.label(format!("CH{}", channel.id));
+                                    ui.label(format!("{:.1}", channel.value));
                                     ui.label(format!("{}", channel.value_type));
                                     ui.label(format!("{}", channel.access_type));
+                                    ui.label(format!("{}", channel.index));
                                     if ui.small_button("Configure").clicked() {
                                         channel_windows_buffer.selected_channel = channel.clone();
                                         windows_open.channel_config = !windows_open.channel_config;
@@ -207,23 +217,62 @@ impl eframe::App for TemplateApp {
                     egui::Grid::new("Channel config")
                         .num_columns(2)
                         .show(ui, |ui| {
-                            ui.label("Index");
-                            ui.text_edit_singleline(&mut device_windows_buffer.name);
+                            // ui.text_edit_singleline(&mut channel_windows_buffer.index);
+                            ui.add(
+                                Slider::new(
+                                    &mut channel_windows_buffer.edited_channel.index,
+                                    0..=49999,
+                                )
+                                .text("Index"),
+                            );
                             ui.end_row();
-                            ui.label("IP address:");
-                            ui.text_edit_singleline(&mut device_windows_buffer.address);
+                            ComboBox::from_label("Value type")
+                                .selected_text(format!(
+                                    "{}",
+                                    channel_windows_buffer.edited_channel.value_type
+                                ))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut channel_windows_buffer.edited_channel.value_type,
+                                        ValueType::Int16,
+                                        format!("{}", ValueType::Int16),
+                                    );
+                                    ui.selectable_value(
+                                        &mut channel_windows_buffer.edited_channel.value_type,
+                                        ValueType::Real32,
+                                        format!("{}", ValueType::Real32),
+                                    );
+                                    ui.selectable_value(
+                                        &mut channel_windows_buffer.edited_channel.value_type,
+                                        ValueType::BoolType,
+                                        format!("{}", ValueType::BoolType),
+                                    );
+                                });
                             ui.end_row();
-                            ui.label("Port:");
-                            ui.text_edit_singleline(&mut device_windows_buffer.port);
+                            ComboBox::from_label("Access type")
+                                .selected_text(format!(
+                                    "{}",
+                                    channel_windows_buffer.edited_channel.access_type
+                                ))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut channel_windows_buffer.edited_channel.access_type,
+                                        AccessType::Read,
+                                        format!("{}", AccessType::Read),
+                                    );
+                                    ui.selectable_value(
+                                        &mut channel_windows_buffer.edited_channel.access_type,
+                                        AccessType::Write,
+                                        format!("{}", AccessType::Write),
+                                    );
+                                });
                             ui.end_row();
                         });
                     ui.vertical_centered_justified(|ui| {
                         if ui.button("Save").clicked() {
-                            if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
-                                devices[0].name = device_windows_buffer.name.clone();
-                                devices[0].config.address = device_windows_buffer.address.clone();
-                                devices[0].config.port = port;
-                            }
+                            let device = &mut devices[0];
+                            device.channels[channel_windows_buffer.selected_channel.id] =
+                                channel_windows_buffer.edited_channel;
                         }
                     });
                 });

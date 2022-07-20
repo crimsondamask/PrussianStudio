@@ -13,6 +13,8 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
     // });
 
     egui::CentralPanel::default().show(ctx, |ui| {
+        ui.label("Monitor");
+        ui.separator();
         ui.toggle_value(&mut app.spawn_logging_thread, "Logging");
         // if ui.button("Start logging").clicked() {
         // app.spawn_logging_thread = !app.spawn_logging_thread;
@@ -25,6 +27,13 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
                 thread::sleep(Duration::from_secs(5));
                 let devices = vec![Device {
                     name: "PLC Received".to_owned(),
+                    channels: vec![
+                        Channel {
+                            value: 5.0,
+                            ..Default::default()
+                        };
+                        10
+                    ],
                     ..Default::default()
                 }];
                 if let Ok(_) = tx.send(devices) {}
@@ -32,8 +41,6 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
         }
         // The central panel the region left after adding TopPanel's and SidePanel's
 
-        ui.label("Monitor");
-        ui.separator();
         egui::warn_if_debug_build(ui);
         ComboBox::from_label("Device")
             .selected_text(format!("{}", app.channel_windows_buffer.selected_device))
