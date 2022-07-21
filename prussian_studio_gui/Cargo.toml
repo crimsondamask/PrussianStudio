@@ -22,6 +22,7 @@ egui_extras = { path = "../egui_extras/" }
 eframe = { version = "0.18.0", features = ["persistence"] }
 serde = { version = "1", features = ["derive"] } # You only need this if you want app persistence
 lib_device = { path = "../device" }
+rand = "0.8.5"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

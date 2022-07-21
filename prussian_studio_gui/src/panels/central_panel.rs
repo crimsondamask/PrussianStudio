@@ -2,6 +2,7 @@ use crate::app::TemplateApp;
 // use crate::window::*;
 use egui::{ComboBox, Context, InnerResponse};
 use lib_device::*;
+use rand::Rng;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
@@ -23,20 +24,23 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
         if !app.spawn_logging_thread {
             let (tx, rx): (Sender<Vec<Device>>, Receiver<Vec<Device>>) = mpsc::channel();
             app.mpsc_channel = Some((tx.clone(), rx));
+            let mut devices_to_read = app.devices.clone();
             thread::spawn(move || loop {
-                thread::sleep(Duration::from_secs(5));
-                let devices = vec![Device {
-                    name: "PLC Received".to_owned(),
-                    channels: vec![
-                        Channel {
-                            value: 5.0,
-                            ..Default::default()
-                        };
-                        10
-                    ],
-                    ..Default::default()
-                }];
-                if let Ok(_) = tx.send(devices) {}
+                thread::sleep(Duration::from_secs(1));
+
+                let channels = devices_to_read[0].channels.clone();
+                let mut channels_to_send = Vec::with_capacity(channels.len());
+                for mut channel in channels.clone() {
+                    channel.value = rand::thread_rng().gen_range(0.0..10.0);
+                    channels_to_send.push(channel);
+                }
+                // let devices = vec![Device {
+                //     name: "PLC".to_owned(),
+                //     channels,
+                //     ..Default::default()
+                // }];
+                devices_to_read[0].channels = channels_to_send;
+                if let Ok(_) = tx.send(devices_to_read.clone()) {}
             });
         }
         // The central panel the region left after adding TopPanel's and SidePanel's

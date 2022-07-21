@@ -188,7 +188,7 @@ impl eframe::App for TemplateApp {
                                 ui.end_row();
                                 for channel in &device.channels {
                                     ui.label(format!("CH{}", channel.id));
-                                    ui.label(format!("{:.1}", channel.value));
+                                    ui.label(format!("{:.2}", channel.value));
                                     ui.label(format!("{}", channel.value_type));
                                     ui.label(format!("{}", channel.access_type));
                                     ui.label(format!("{}", channel.index));

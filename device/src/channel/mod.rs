@@ -67,7 +67,7 @@ impl Default for Channel {
     fn default() -> Self {
         Self {
             id: 0,
-            value_type: ValueType::BoolType,
+            value_type: ValueType::Int16,
             access_type: AccessType::Read,
             value: 0.0,
             index: 0,
