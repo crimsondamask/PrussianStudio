@@ -22,7 +22,8 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
         // app.spawn_logging_thread = !app.spawn_logging_thread;
         // }
 
-        if !app.spawn_logging_thread {
+        if app.spawn_logging_thread {
+            app.spawn_logging_thread = !app.spawn_logging_thread;
             let (tx, rx): (Sender<Vec<Device>>, Receiver<Vec<Device>>) = mpsc::channel();
             app.mpsc_channel = Some((tx.clone(), rx));
             let mut devices_to_read = app.devices.clone();
@@ -46,11 +47,11 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
                             //     ..Default::default()
                             // }];
                             devices_to_read[0].channels = channels_to_send;
+                            if let Ok(_) = tx.send(devices_to_read.clone()) {}
                         }
                     }
                     Err(e) => devices_to_read[0].status = format!("Error: {}", e),
                 }
-                if let Ok(_) = tx.send(devices_to_read.clone()) {}
             });
         }
         // The central panel the region left after adding TopPanel's and SidePanel's

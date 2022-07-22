@@ -5,7 +5,7 @@ use std::{error::Error, fmt::Display};
 
 pub use channel::*;
 use serde::{Deserialize, Serialize};
-use tokio_modbus::prelude::*;
+use tokio_modbus::{client::sync::Context, prelude::*};
 
 const NUM_CHANNELS: usize = 10;
 
@@ -28,6 +28,7 @@ pub struct Device {
     pub device_type: DeviceType,
     pub config: DeviceConfig,
     pub channels: Vec<Channel>,
+    pub status: String,
 }
 
 impl Device {
@@ -36,25 +37,27 @@ impl Device {
         device_type: DeviceType,
         config: DeviceConfig,
         channels: Vec<Channel>,
+        status: String,
     ) -> Self {
         Self {
             name,
             device_type,
             config,
             channels,
+            status,
         }
     }
-    pub fn fetch_data_tcp(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn tcp_connect(&mut self) -> Result<Context, Box<dyn Error>> {
         let ip = &self.config.address;
         let port = &self.config.port;
         let socket = format!("{}:{}", ip, port).parse()?;
 
         let mut ctx = sync::tcp::connect(socket)?;
-        for channel in &mut self.channels {
-            channel.read_value(&mut ctx);
-        }
+        // for channel in &mut self.channels {
+        // channel.read_value(&mut ctx);
+        // }
 
-        Ok(())
+        Ok(ctx)
     }
 }
 
@@ -72,10 +75,11 @@ impl Default for Device {
             name: "".to_owned(),
             device_type: DeviceType::Modbus,
             config: DeviceConfig {
-                address: "192.168.0.1".to_owned(),
-                port: 502,
+                address: "127.0.0.1".to_owned(),
+                port: 5502,
             },
             channels,
+            status: "Initialized".to_owned(),
         }
     }
 }

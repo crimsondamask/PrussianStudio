@@ -172,7 +172,7 @@ impl eframe::App for TemplateApp {
                 .show(ctx, |ui| {
                     Grid::new("Channel List")
                         .striped(true)
-                        .num_columns(6)
+                        .num_columns(7)
                         .min_col_width(160.0)
                         .show(ui, |ui| {
                             if let Some(device) = &devices.iter().nth(0) {
@@ -184,12 +184,13 @@ impl eframe::App for TemplateApp {
                                 ui.end_row();
                                 ui.label("Channel");
                                 ui.label("Value");
+                                ui.label("Tag");
                                 ui.label("Value type");
                                 ui.label("Access");
                                 ui.label("Address");
                                 ui.label("Status");
                                 ui.end_row();
-                                for _ in 0..6 {
+                                for _ in 0..7 {
                                     ui.separator();
                                 }
                                 ui.end_row();
@@ -202,6 +203,7 @@ impl eframe::App for TemplateApp {
                                     }
                                     // ui.label(format!("CH{}", channel.id));
                                     ui.label(format!("{:.2}", channel.value));
+                                    ui.label(format!("{}", channel.tag));
                                     ui.label(format!("{}", channel.value_type));
                                     ui.label(format!("{}", channel.access_type));
                                     ui.label(format!("{}", channel.index));
@@ -228,7 +230,11 @@ impl eframe::App for TemplateApp {
                     egui::Grid::new("Channel config")
                         .num_columns(2)
                         .show(ui, |ui| {
-                            // ui.text_edit_singleline(&mut channel_windows_buffer.index);
+                            channel_windows_buffer.edited_channel.id =
+                                channel_windows_buffer.selected_channel.id;
+                            ui.label("Tag");
+                            ui.text_edit_singleline(&mut channel_windows_buffer.edited_channel.tag);
+                            ui.end_row();
                             ui.add(
                                 Slider::new(
                                     &mut channel_windows_buffer.edited_channel.index,

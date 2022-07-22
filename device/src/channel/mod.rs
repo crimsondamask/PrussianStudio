@@ -17,24 +17,35 @@ pub enum AccessType {
     Write,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Channel {
     pub id: usize,
+    pub tag: String,
     pub value_type: ValueType,
     pub access_type: AccessType,
     pub value: f32,
     pub index: u16,
+    pub status: String,
 }
 
 impl Channel {
-    pub fn new(id: usize, value_type: ValueType, access_type: AccessType, index: u16) -> Self {
+    pub fn new(
+        id: usize,
+        value_type: ValueType,
+        access_type: AccessType,
+        index: u16,
+        tag: String,
+        status: String,
+    ) -> Self {
         let value = 0.0;
         Self {
             id,
+            tag,
             value_type,
             access_type,
             value,
             index,
+            status,
         }
     }
     pub fn read_value(&mut self, ctx: &mut Context) {
@@ -67,10 +78,12 @@ impl Default for Channel {
     fn default() -> Self {
         Self {
             id: 0,
+            tag: "".to_owned(),
             value_type: ValueType::Int16,
             access_type: AccessType::Read,
             value: 0.0,
             index: 0,
+            status: "Initialized".to_owned(),
         }
     }
 }
