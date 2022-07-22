@@ -1,5 +1,6 @@
 use crate::app::TemplateApp;
 // use crate::window::*;
+use crossbeam_channel::unbounded;
 use egui::{ComboBox, Context, InnerResponse};
 use lib_device::*;
 use rand::Rng;
@@ -24,8 +25,12 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
 
         if app.spawn_logging_thread {
             app.spawn_logging_thread = !app.spawn_logging_thread;
-            let (tx, rx): (Sender<Vec<Device>>, Receiver<Vec<Device>>) = mpsc::channel();
-            app.mpsc_channel = Some((tx.clone(), rx));
+            // let (tx, rx): (Sender<Vec<Device>>, Receiver<Vec<Device>>) = mpsc::channel();
+            let (s, r): (
+                crossbeam_channel::Sender<Vec<Device>>,
+                crossbeam_channel::Receiver<Vec<Device>>,
+            ) = unbounded();
+            app.mpsc_channel = Some((s.clone(), r));
             let mut devices_to_read = app.devices.clone();
             thread::spawn(move || {
                 match devices_to_read[0].tcp_connect() {
@@ -47,7 +52,7 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
                             //     ..Default::default()
                             // }];
                             devices_to_read[0].channels = channels_to_send;
-                            if let Ok(_) = tx.send(devices_to_read.clone()) {}
+                            if let Ok(_) = s.send(devices_to_read.clone()) {}
                         }
                     }
                     Err(e) => devices_to_read[0].status = format!("Error: {}", e),

@@ -33,7 +33,10 @@ pub struct TemplateApp {
     #[serde(skip)]
     pub devices: Vec<Device>,
     #[serde(skip)]
-    pub mpsc_channel: Option<(Sender<Vec<Device>>, Receiver<Vec<Device>>)>,
+    pub mpsc_channel: Option<(
+        crossbeam_channel::Sender<Vec<Device>>,
+        crossbeam_channel::Receiver<Vec<Device>>,
+    )>,
     #[serde(skip)]
     pub spawn_logging_thread: bool,
 }
