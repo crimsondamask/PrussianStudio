@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+// use tokio_modbus::prelude::*;
 
 pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> {
     // thread::spawn(move || loop {
@@ -25,21 +26,30 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
             let (tx, rx): (Sender<Vec<Device>>, Receiver<Vec<Device>>) = mpsc::channel();
             app.mpsc_channel = Some((tx.clone(), rx));
             let mut devices_to_read = app.devices.clone();
-            thread::spawn(move || loop {
-                thread::sleep(Duration::from_secs(1));
+            thread::spawn(move || {
+                match devices_to_read[0].tcp_connect() {
+                    Ok(mut ctx) => {
+                        devices_to_read[0].status = "Connected.".to_owned();
+                        loop {
+                            thread::sleep(Duration::from_secs(1));
 
-                let channels = devices_to_read[0].channels.clone();
-                let mut channels_to_send = Vec::with_capacity(channels.len());
-                for mut channel in channels.clone() {
-                    channel.value = rand::thread_rng().gen_range(0.0..10.0);
-                    channels_to_send.push(channel);
+                            let channels = devices_to_read[0].channels.clone();
+                            let mut channels_to_send = Vec::with_capacity(channels.len());
+                            for mut channel in channels.clone() {
+                                // channel.value = rand::thread_rng().gen_range(0.0..10.0);
+                                channel.read_value(&mut ctx);
+                                channels_to_send.push(channel);
+                            }
+                            // let devices = vec![Device {
+                            //     name: "PLC".to_owned(),
+                            //     channels,
+                            //     ..Default::default()
+                            // }];
+                            devices_to_read[0].channels = channels_to_send;
+                        }
+                    }
+                    Err(e) => devices_to_read[0].status = format!("Error: {}", e),
                 }
-                // let devices = vec![Device {
-                //     name: "PLC".to_owned(),
-                //     channels,
-                //     ..Default::default()
-                // }];
-                devices_to_read[0].channels = channels_to_send;
                 if let Ok(_) = tx.send(devices_to_read.clone()) {}
             });
         }

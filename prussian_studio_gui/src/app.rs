@@ -11,7 +11,7 @@ use crate::{
     window::*,
 };
 use egui::{global_dark_light_mode_buttons, mutex::Mutex, Color32, ComboBox, Rounding, Window};
-use egui::{Grid, Slider};
+use egui::{Button, Grid, Slider};
 pub use lib_device::Channel;
 pub use lib_device::*;
 
@@ -176,26 +176,37 @@ impl eframe::App for TemplateApp {
                         .min_col_width(160.0)
                         .show(ui, |ui| {
                             if let Some(device) = &devices.iter().nth(0) {
+                                ui.label("Device status:");
+                                ui.label(format!("{}", &device.status));
+
+                                ui.end_row();
+                                ui.separator();
+                                ui.end_row();
                                 ui.label("Channel");
                                 ui.label("Value");
                                 ui.label("Value type");
                                 ui.label("Access");
                                 ui.label("Address");
+                                ui.label("Status");
                                 ui.end_row();
                                 for _ in 0..6 {
                                     ui.separator();
                                 }
                                 ui.end_row();
                                 for channel in &device.channels {
-                                    ui.label(format!("CH{}", channel.id));
+                                    let button =
+                                        Button::new(format!("CH{}", channel.id)).frame(true);
+                                    if ui.add(button).clicked() {
+                                        channel_windows_buffer.selected_channel = channel.clone();
+                                        windows_open.channel_config = !windows_open.channel_config;
+                                    }
+                                    // ui.label(format!("CH{}", channel.id));
                                     ui.label(format!("{:.2}", channel.value));
                                     ui.label(format!("{}", channel.value_type));
                                     ui.label(format!("{}", channel.access_type));
                                     ui.label(format!("{}", channel.index));
-                                    if ui.small_button("Configure").clicked() {
-                                        channel_windows_buffer.selected_channel = channel.clone();
-                                        windows_open.channel_config = !windows_open.channel_config;
-                                    }
+                                    ui.label(format!("{}", channel.status));
+                                    // if ui.small_button("Configure").clicked() {}
                                     ui.end_row();
                                 }
                             }
@@ -272,7 +283,7 @@ impl eframe::App for TemplateApp {
                         if ui.button("Save").clicked() {
                             let device = &mut devices[0];
                             device.channels[channel_windows_buffer.selected_channel.id] =
-                                channel_windows_buffer.edited_channel;
+                                channel_windows_buffer.edited_channel.clone();
                         }
                     });
                 });
