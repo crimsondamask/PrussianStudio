@@ -26,24 +26,36 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
         if app.spawn_logging_thread {
             app.spawn_logging_thread = !app.spawn_logging_thread;
             // let (tx, rx): (Sender<Vec<Device>>, Receiver<Vec<Device>>) = mpsc::channel();
-            let (s, r): (
+            let (read_s, read_r): (
                 crossbeam_channel::Sender<Vec<Device>>,
                 crossbeam_channel::Receiver<Vec<Device>>,
             ) = unbounded();
-            app.mpsc_channel = Some((s.clone(), r));
+            let (update_s, update_r): (
+                crossbeam_channel::Sender<Vec<Device>>,
+                crossbeam_channel::Receiver<Vec<Device>>,
+            ) = unbounded();
+
+            app.read_channel = Some((read_s.clone(), read_r));
+            app.update_channel = Some((update_s, update_r.clone()));
             let mut devices_to_read = app.devices.clone();
             thread::spawn(move || {
                 match devices_to_read[0].tcp_connect() {
                     Ok(mut ctx) => {
+                        println!("Connected.");
                         devices_to_read[0].status = "Connected.".to_owned();
                         loop {
                             thread::sleep(Duration::from_secs(1));
+                            if let Ok(received_devices) = update_r.try_recv() {
+                                devices_to_read = received_devices.clone();
+                            }
 
                             let channels = devices_to_read[0].channels.clone();
                             let mut channels_to_send = Vec::with_capacity(channels.len());
                             for mut channel in channels.clone() {
                                 // channel.value = rand::thread_rng().gen_range(0.0..10.0);
+                                println!("Trying to read channel");
                                 channel.read_value(&mut ctx);
+                                println!("{}", &channel.value);
                                 channels_to_send.push(channel);
                             }
                             // let devices = vec![Device {
@@ -52,7 +64,7 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
                             //     ..Default::default()
                             // }];
                             devices_to_read[0].channels = channels_to_send;
-                            if let Ok(_) = s.send(devices_to_read.clone()) {}
+                            if let Ok(_) = read_s.send(devices_to_read.clone()) {}
                         }
                     }
                     Err(e) => devices_to_read[0].status = format!("Error: {}", e),
@@ -73,7 +85,7 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
                     );
                 }
             });
-        if let Some(devices) = &app.mpsc_channel {
+        if let Some(devices) = &app.read_channel {
             if let Ok(device_received) = devices.1.try_recv() {
                 app.devices = device_received;
             }

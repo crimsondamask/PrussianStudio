@@ -33,7 +33,12 @@ pub struct TemplateApp {
     #[serde(skip)]
     pub devices: Vec<Device>,
     #[serde(skip)]
-    pub mpsc_channel: Option<(
+    pub read_channel: Option<(
+        crossbeam_channel::Sender<Vec<Device>>,
+        crossbeam_channel::Receiver<Vec<Device>>,
+    )>,
+    #[serde(skip)]
+    pub update_channel: Option<(
         crossbeam_channel::Sender<Vec<Device>>,
         crossbeam_channel::Receiver<Vec<Device>>,
     )>,
@@ -59,7 +64,8 @@ impl Default for TemplateApp {
                     ..Default::default()
                 },
             ],
-            mpsc_channel: None,
+            read_channel: None,
+            update_channel: None,
             spawn_logging_thread: false,
         }
     }
@@ -114,7 +120,8 @@ impl eframe::App for TemplateApp {
             value,
             windows_open,
             devices,
-            mpsc_channel,
+            read_channel,
+            update_channel,
             spawn_logging_thread,
         } = self;
 
@@ -290,9 +297,11 @@ impl eframe::App for TemplateApp {
                         });
                     ui.vertical_centered_justified(|ui| {
                         if ui.button("Save").clicked() {
-                            let device = &mut devices[0];
-                            device.channels[channel_windows_buffer.selected_channel.id] =
+                            devices[0].channels[channel_windows_buffer.selected_channel.id] =
                                 channel_windows_buffer.edited_channel.clone();
+                            if let Some(updated_channel) = update_channel {
+                                if let Ok(_) = updated_channel.0.send(devices.to_vec()) {}
+                            }
                         }
                     });
                 });
