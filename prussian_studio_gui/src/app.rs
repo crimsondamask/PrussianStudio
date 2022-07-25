@@ -15,6 +15,8 @@ use egui::{Button, Grid, Slider};
 pub use lib_device::Channel;
 pub use lib_device::*;
 
+const NUM_CHANNELS: usize = 10;
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -51,7 +53,10 @@ impl Default for TemplateApp {
         Self {
             // Example stuff:
             device_windows_buffer: DeviceWindowsBuffer::default(),
-            channel_windows_buffer: ChannelWindowsBuffer::default(),
+            channel_windows_buffer: ChannelWindowsBuffer {
+                channel_write_value: vec![String::new(); NUM_CHANNELS],
+                ..Default::default()
+            },
             value: 2.7,
             windows_open: WindowsOpen::default(),
             devices: vec![
@@ -204,7 +209,7 @@ impl eframe::App for TemplateApp {
                                     ui.separator();
                                 }
                                 ui.end_row();
-                                for channel in &device.channels {
+                                for mut channel in device.channels.clone() {
                                     let button =
                                         Button::new(format!("CH{}", channel.id)).frame(true);
                                     if ui.add(button).clicked() {
@@ -212,7 +217,28 @@ impl eframe::App for TemplateApp {
                                         windows_open.channel_config = !windows_open.channel_config;
                                     }
                                     // ui.label(format!("CH{}", channel.id));
-                                    ui.label(format!("{:.2}", channel.value));
+                                    match channel.access_type {
+                                        AccessType::Write => {
+                                            ui.horizontal(|ui| {
+                                                ui.text_edit_singleline(
+                                                    &mut channel_windows_buffer.channel_write_value
+                                                        [channel.id],
+                                                );
+                                                if ui.button("Write").clicked() {
+                                                    if let Ok(value) = channel_windows_buffer
+                                                        .channel_write_value[channel.id]
+                                                        .parse::<f32>()
+                                                    {
+                                                        channel.value = value;
+                                                        // TO DO!
+                                                    }
+                                                }
+                                            });
+                                        }
+                                        AccessType::Read => {
+                                            ui.label(format!("{:.2}", channel.value));
+                                        }
+                                    };
                                     ui.label(format!("{}", channel.tag));
                                     ui.label(format!("{}", channel.value_type));
                                     ui.label(format!("{}", channel.access_type));

@@ -23,4 +23,5 @@ pub struct ChannelWindowsBuffer {
     pub selected_device: Device,
     pub selected_channel: Channel,
     pub edited_channel: Channel,
+    pub channel_write_value: Vec<String>,
 }
