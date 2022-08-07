@@ -72,6 +72,54 @@ impl Channel {
             }
         }
     }
+    pub fn write_value(&mut self, ctx: &mut Context) {
+        match self.value_type {
+            ValueType::Int16 => {
+                let value = self.value as u16;
+
+                match ctx.write_single_register(self.index, value) {
+                    Ok(_) => {
+                        self.status = "Value written successfully!".to_owned();
+                    }
+                    Err(e) => {
+                        self.status = format!("ERROR!: {}", e);
+                    }
+                }
+            }
+            ValueType::Real32 => {
+                let value = self.value as u16;
+
+                match ctx.write_single_register(self.index, value) {
+                    Ok(_) => {
+                        self.status = "Value written successfully!".to_owned();
+                    }
+                    Err(e) => {
+                        self.status = format!("ERROR!: {}", e);
+                    }
+                }
+            }
+            ValueType::BoolType => {
+                let value = self.value as u16;
+                match value {
+                    1 => {
+                        if let Ok(_) = ctx.write_single_coil(self.index, true) {
+                            self.status = "Value written successfully!".to_owned();
+                        } else {
+                            self.status = "Couldn't write value".to_owned();
+                        }
+                    }
+                    0 => {
+                        if let Ok(_) = ctx.write_single_coil(self.index, false) {
+                            self.status = "Value written successfully!".to_owned();
+                        } else {
+                            self.status = "Couldn't write value".to_owned();
+                        }
+                    }
+                    _ => self.status = "Only bit values are allowed!.".to_owned(),
+                }
+            }
+        }
+    }
 }
 
 impl Default for Channel {

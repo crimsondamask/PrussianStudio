@@ -32,7 +32,7 @@ pub struct TemplateApp {
     pub value: f32,
     #[serde(skip)]
     pub windows_open: WindowsOpen,
-    #[serde(skip)]
+    // #[serde(skip)]
     pub devices: Vec<Device>,
     #[serde(skip)]
     pub read_channel: Option<(
@@ -220,18 +220,13 @@ impl eframe::App for TemplateApp {
                                     match channel.access_type {
                                         AccessType::Write => {
                                             ui.horizontal(|ui| {
-                                                ui.text_edit_singleline(
-                                                    &mut channel_windows_buffer.channel_write_value
-                                                        [channel.id],
-                                                );
+                                                ui.label(format!("{:.2}", channel.value));
                                                 if ui.button("Write").clicked() {
-                                                    if let Ok(value) = channel_windows_buffer
-                                                        .channel_write_value[channel.id]
-                                                        .parse::<f32>()
-                                                    {
-                                                        channel.value = value;
-                                                        // TO DO!
-                                                    }
+                                                    channel_windows_buffer.selected_channel =
+                                                        channel.clone();
+
+                                                    windows_open.channel_write_value =
+                                                        !windows_open.channel_write_value;
                                                 }
                                             });
                                         }
@@ -249,6 +244,28 @@ impl eframe::App for TemplateApp {
                                 }
                             }
                         });
+                });
+            Window::new("Write Value")
+                .open(&mut windows_open.channel_write_value)
+                .show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.text_edit_singleline(
+                            &mut channel_windows_buffer.channel_write_value
+                                [channel_windows_buffer.selected_channel.id],
+                        );
+                        if ui.button("Write").clicked() {
+                            if let Ok(value) = channel_windows_buffer.channel_write_value
+                                [channel_windows_buffer.selected_channel.id]
+                                .parse::<f32>()
+                            {
+                                devices[0].channels[channel_windows_buffer.selected_channel.id]
+                                    .value = value;
+                                if let Some(updated_channel) = update_channel {
+                                    if let Ok(_) = updated_channel.0.send(devices.to_vec()) {}
+                                }
+                            }
+                        }
+                    });
                 });
             Window::new("Preferences")
                 .open(&mut windows_open.preferences)

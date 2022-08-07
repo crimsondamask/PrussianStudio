@@ -3,6 +3,7 @@
 members = [
   "./prussian_studio_gui",
   "./device",
+  "./prussian_studio_server/",
   "./egui_extras",
 ]
 

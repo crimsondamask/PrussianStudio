@@ -11,6 +11,7 @@ pub struct WindowsOpen {
     pub preferences: bool,
     pub channel_config: bool,
     pub device_channels_vec: [bool; 10],
+    pub channel_write_value: bool,
 }
 #[derive(Default, Serialize, Deserialize)]
 pub struct DeviceWindowsBuffer {
