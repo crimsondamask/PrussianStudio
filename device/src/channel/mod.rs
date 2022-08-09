@@ -17,6 +17,12 @@ pub enum AccessType {
     Write,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ChannelAlarm {
+    pub high: Option<f32>,
+    pub low: Option<f32>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Channel {
     pub id: usize,
@@ -26,6 +32,7 @@ pub struct Channel {
     pub value: f32,
     pub index: u16,
     pub status: String,
+    pub alarm: ChannelAlarm,
 }
 
 impl Channel {
@@ -36,6 +43,7 @@ impl Channel {
         index: u16,
         tag: String,
         status: String,
+        alarm: ChannelAlarm,
     ) -> Self {
         let value = 0.0;
         Self {
@@ -46,6 +54,7 @@ impl Channel {
             value,
             index,
             status,
+            alarm,
         }
     }
     pub fn read_value(&mut self, ctx: &mut Context) {
@@ -132,6 +141,10 @@ impl Default for Channel {
             value: 0.0,
             index: 0,
             status: "Initialized".to_owned(),
+            alarm: ChannelAlarm {
+                high: None,
+                low: None,
+            },
         }
     }
 }
@@ -170,5 +183,13 @@ impl Default for ValueType {
 impl Default for AccessType {
     fn default() -> Self {
         AccessType::Read
+    }
+}
+impl Default for ChannelAlarm {
+    fn default() -> Self {
+        Self {
+            high: None,
+            low: None,
+        }
     }
 }

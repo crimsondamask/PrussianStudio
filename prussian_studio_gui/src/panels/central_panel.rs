@@ -88,7 +88,11 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
                                 channels_to_send.push(channel);
                             }
                             devices_to_read[0].channels = channels_to_send;
+
+                            // Send the read data to the main GUI thread.
                             if let Ok(_) = read_s.send(devices_to_read.clone()) {}
+
+                            // Updating the serialized data and sending it over the websocket server.
                             data_to_serialize.devices = devices_to_read.clone();
                             send_over_socket(&mut socket, &data_to_serialize);
                         }

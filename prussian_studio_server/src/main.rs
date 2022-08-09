@@ -51,9 +51,9 @@ async fn handle_connection(peer_map: PeerMap, raw_stream: TcpStream, addr: Socke
 
     let broadcast_incoming = incoming.try_for_each(|msg| {
         println!(
-            "Received a message from {}: {}",
+            "Received a message from {}",
             addr,
-            msg.to_text().unwrap()
+            // msg.to_text().unwrap()
         );
         let peers = peer_map.lock().unwrap();
 
