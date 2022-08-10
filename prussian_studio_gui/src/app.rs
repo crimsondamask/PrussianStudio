@@ -187,7 +187,7 @@ impl eframe::App for TemplateApp {
                 .show(ctx, |ui| {
                     Grid::new("Channel List")
                         .striped(true)
-                        .num_columns(7)
+                        .num_columns(8)
                         .min_col_width(160.0)
                         .show(ui, |ui| {
                             if let Some(device) = &devices.iter().nth(0) {
@@ -199,22 +199,25 @@ impl eframe::App for TemplateApp {
                                 ui.end_row();
                                 ui.label("Channel");
                                 ui.label("Value");
+                                ui.label("Alarm");
                                 ui.label("Tag");
                                 ui.label("Value type");
                                 ui.label("Access");
                                 ui.label("Address");
                                 ui.label("Status");
                                 ui.end_row();
-                                for _ in 0..7 {
+                                for _ in 0..8 {
                                     ui.separator();
                                 }
                                 ui.end_row();
-                                for mut channel in device.channels.clone() {
+                                for channel in device.channels.clone() {
                                     let button =
                                         Button::new(format!("CH{}", channel.id)).frame(true);
                                     if ui.add(button).clicked() {
                                         channel_windows_buffer.selected_channel = channel.clone();
                                         windows_open.channel_config = !windows_open.channel_config;
+                                        channel_windows_buffer.edited_channel =
+                                            channel_windows_buffer.selected_channel.clone();
                                     }
                                     // ui.label(format!("CH{}", channel.id));
                                     match channel.access_type {
@@ -234,6 +237,20 @@ impl eframe::App for TemplateApp {
                                             ui.label(format!("{:.2}", channel.value));
                                         }
                                     };
+                                    let mut alarm = "";
+                                    if channel.alarm.low.active {
+                                        alarm = "LOW ALARM";
+                                    }
+
+                                    if channel.alarm.high.active {
+                                        alarm = "HIGH ALARM";
+                                    }
+                                    if channel.alarm.low.active && channel.alarm.high.active {
+                                        alarm = "LOW ALARM/HIGH ALARM";
+                                    }
+
+                                    ui.colored_label(Color32::RED, alarm);
+
                                     ui.label(format!("{}", channel.tag));
                                     ui.label(format!("{}", channel.value_type));
                                     ui.label(format!("{}", channel.access_type));
@@ -279,6 +296,7 @@ impl eframe::App for TemplateApp {
                         "{} configuration",
                         channel_windows_buffer.selected_channel
                     ));
+
                     ui.separator();
                     egui::Grid::new("Channel config")
                         .num_columns(2)
@@ -336,6 +354,52 @@ impl eframe::App for TemplateApp {
                                         format!("{}", AccessType::Write),
                                     );
                                 });
+                            ui.end_row();
+                            ui.label("Low alarm:");
+                            ui.label("High alarm:");
+                            ui.end_row();
+                            ui.checkbox(
+                                &mut channel_windows_buffer.edited_channel.alarm.low.enabled,
+                                "Enabled",
+                            );
+                            ui.checkbox(
+                                &mut channel_windows_buffer.edited_channel.alarm.high.enabled,
+                                "Enabled",
+                            );
+                            ui.end_row();
+                            ui.add_enabled_ui(
+                                channel_windows_buffer.edited_channel.alarm.low.enabled,
+                                |ui| {
+                                    ui.add(
+                                        Slider::new(
+                                            &mut channel_windows_buffer
+                                                .edited_channel
+                                                .alarm
+                                                .low
+                                                .setpoint,
+                                            0.0..=1000.0,
+                                        )
+                                        .text(""),
+                                    );
+                                },
+                            );
+                            ui.add_enabled_ui(
+                                channel_windows_buffer.edited_channel.alarm.high.enabled,
+                                |ui| {
+                                    ui.add(
+                                        Slider::new(
+                                            &mut channel_windows_buffer
+                                                .edited_channel
+                                                .alarm
+                                                .high
+                                                .setpoint,
+                                            0.0..=1000.0,
+                                        )
+                                        .text(""),
+                                    );
+                                },
+                            );
+
                             ui.end_row();
                         });
                     ui.vertical_centered_justified(|ui| {

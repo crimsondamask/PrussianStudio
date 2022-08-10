@@ -2,6 +2,8 @@
 
 use std::fmt::{write, Display};
 
+mod alarm;
+use alarm::*;
 use serde::{Deserialize, Serialize};
 use tokio_modbus::prelude::{sync::Context, *};
 
@@ -19,8 +21,8 @@ pub enum AccessType {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ChannelAlarm {
-    pub high: Option<f32>,
-    pub low: Option<f32>,
+    pub high: Alarm,
+    pub low: Alarm,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -62,6 +64,8 @@ impl Channel {
             ValueType::Int16 => {
                 if let Ok(value) = ctx.read_holding_registers(self.index, 1) {
                     self.value = value[0] as f32;
+
+                    self.process_alarms(self.value);
                 }
             }
             ValueType::Real32 => {
@@ -69,6 +73,8 @@ impl Channel {
                     let data_32bit_rep = ((data[0] as u32) << 16) | data[1] as u32;
                     let data_32_array = data_32bit_rep.to_ne_bytes();
                     self.value = f32::from_ne_bytes(data_32_array);
+
+                    self.process_alarms(self.value);
                 }
             }
             ValueType::BoolType => {
@@ -129,6 +135,15 @@ impl Channel {
             }
         }
     }
+
+    pub fn process_alarms(&mut self, value: f32) {
+        if self.alarm.low.enabled {
+            self.alarm.low.process_alarm(value);
+        }
+        if self.alarm.high.enabled {
+            self.alarm.high.process_alarm(value);
+        }
+    }
 }
 
 impl Default for Channel {
@@ -142,8 +157,18 @@ impl Default for Channel {
             index: 0,
             status: "Initialized".to_owned(),
             alarm: ChannelAlarm {
-                high: None,
-                low: None,
+                high: Alarm {
+                    alarm_type: AlarmType::High,
+                    active: false,
+                    enabled: false,
+                    setpoint: 0.0,
+                },
+                low: Alarm {
+                    alarm_type: AlarmType::Low,
+                    active: false,
+                    enabled: false,
+                    setpoint: 0.0,
+                },
             },
         }
     }
@@ -183,13 +208,5 @@ impl Default for ValueType {
 impl Default for AccessType {
     fn default() -> Self {
         AccessType::Read
-    }
-}
-impl Default for ChannelAlarm {
-    fn default() -> Self {
-        Self {
-            high: None,
-            low: None,
-        }
     }
 }
