@@ -37,41 +37,41 @@ pub fn top_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> {
                 // global_dark_light_mode_buttons(ui);
             });
         });
-        Window::new("PLC Channels")
-            .open(&mut app.windows_open.device_channels)
-            .scroll2([false, true])
-            .show(ctx, |ui| {
-                Grid::new("Channel List")
-                    .striped(true)
-                    .num_columns(6)
-                    .min_col_width(160.0)
-                    .show(ui, |ui| {
-                        if let Some(device) = &app.devices.iter().nth(0) {
-                            ui.label("Channel");
-                            ui.label("Value");
-                            ui.label("Value type");
-                            ui.label("Access");
-                            ui.label("Address");
-                            ui.end_row();
-                            for _ in 0..6 {
-                                ui.separator();
-                            }
-                            ui.end_row();
-                            for channel in &device.channels {
-                                ui.label(format!("CH{}", channel.id));
-                                ui.label(format!("{:.1}", channel.value));
-                                ui.label(format!("{}", channel.value_type));
-                                ui.label(format!("{}", channel.access_type));
-                                ui.label(format!("{}", channel.index));
-                                if ui.small_button("Configure").clicked() {
-                                    app.channel_windows_buffer.selected_channel = channel.clone();
-                                    app.windows_open.channel_config =
-                                        !app.windows_open.channel_config;
-                                }
-                                ui.end_row();
-                            }
-                        }
-                    });
-            });
+        // Window::new("PLC Channels")
+        //     .open(&mut app.windows_open.device_channels)
+        //     .scroll2([false, true])
+        //     .show(ctx, |ui| {
+        //         Grid::new("Channel List")
+        //             .striped(true)
+        //             .num_columns(6)
+        //             .min_col_width(160.0)
+        //             .show(ui, |ui| {
+        //                 if let Some(device) = &app.devices.iter().nth(0) {
+        //                     ui.label("Channel");
+        //                     ui.label("Value");
+        //                     ui.label("Value type");
+        //                     ui.label("Access");
+        //                     ui.label("Address");
+        //                     ui.end_row();
+        //                     for _ in 0..6 {
+        //                         ui.separator();
+        //                     }
+        //                     ui.end_row();
+        //                     for channel in &device.channels {
+        //                         ui.label(format!("CH{}", channel.id));
+        //                         ui.label(format!("{:.1}", channel.value));
+        //                         ui.label(format!("{}", channel.value_type));
+        //                         ui.label(format!("{}", channel.access_type));
+        //                         ui.label(format!("{}", channel.index));
+        //                         if ui.small_button("Configure").clicked() {
+        //                             app.channel_windows_buffer.selected_channel = channel.clone();
+        //                             app.windows_open.channel_config =
+        //                                 !app.windows_open.channel_config;
+        //                         }
+        //                         ui.end_row();
+        //                     }
+        //                 }
+        //             });
+        //     });
     })
 }

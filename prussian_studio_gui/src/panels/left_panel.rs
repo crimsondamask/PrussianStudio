@@ -18,6 +18,7 @@ pub fn left_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> {
                     .spawn()
                     .expect("command failed to start");
             }
+            ui.toggle_value(&mut app.spawn_logging_thread, "Logging");
         });
         // for channel in app.devices[0].channels.clone() {
         // ui.label(format!("{}", channel.id));

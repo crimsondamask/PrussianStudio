@@ -31,7 +31,6 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
     egui::CentralPanel::default().show(ctx, |ui| {
         ui.label("Monitor");
         ui.separator();
-        ui.toggle_value(&mut app.spawn_logging_thread, "Logging");
         // if ui.button("Start logging").clicked() {
         // app.spawn_logging_thread = !app.spawn_logging_thread;
         // }

@@ -4,6 +4,7 @@ mod app;
 mod fonts;
 mod panels;
 mod window;
+mod windows;
 pub use app::TemplateApp;
 
 // ----------------------------------------------------------------------------

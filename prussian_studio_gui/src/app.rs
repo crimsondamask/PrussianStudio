@@ -1,19 +1,17 @@
 // use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
-use std::time::Duration;
-
 use crate::{
     fonts::*,
-    panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel, *},
+    panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel},
     window::*,
 };
-use egui::{global_dark_light_mode_buttons, mutex::Mutex, Color32, ComboBox, Rounding, Window};
+use egui::{global_dark_light_mode_buttons, Color32, ComboBox, Rounding, Window};
 use egui::{Button, Grid, Slider};
 pub use lib_device::Channel;
 pub use lib_device::*;
+pub use lib_logger::{parse_pattern, Logger, LoggerType};
+use regex::Regex;
+use rfd::FileDialog;
 
 const NUM_CHANNELS: usize = 10;
 
@@ -25,6 +23,8 @@ pub struct TemplateApp {
 
     // this how you opt-out of serialization of a member
     #[serde(skip)]
+    pub test_str: String,
+    pub logger_window_buffer: LoggerWindowBuffer,
     pub device_windows_buffer: DeviceWindowsBuffer,
     #[serde(skip)]
     pub channel_windows_buffer: ChannelWindowsBuffer,
@@ -34,6 +34,7 @@ pub struct TemplateApp {
     pub windows_open: WindowsOpen,
     // #[serde(skip)]
     pub devices: Vec<Device>,
+    pub loggers: Vec<Logger>,
     #[serde(skip)]
     pub read_channel: Option<(
         crossbeam_channel::Sender<Vec<Device>>,
@@ -46,12 +47,16 @@ pub struct TemplateApp {
     )>,
     #[serde(skip)]
     pub spawn_logging_thread: bool,
+    #[serde(skip)]
+    pub re: Regex,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
         Self {
             // Example stuff:
+            test_str: String::new(),
+            logger_window_buffer: LoggerWindowBuffer::default(),
             device_windows_buffer: DeviceWindowsBuffer::default(),
             channel_windows_buffer: ChannelWindowsBuffer {
                 channel_write_value: vec![String::new(); NUM_CHANNELS],
@@ -69,9 +74,11 @@ impl Default for TemplateApp {
                     ..Default::default()
                 },
             ],
+            loggers: Vec::new(),
             read_channel: None,
             update_channel: None,
             spawn_logging_thread: false,
+            re: Regex::new(r"CH+(?:([0-9]+))").unwrap(),
         }
     }
 }
@@ -120,14 +127,16 @@ impl eframe::App for TemplateApp {
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self {
+            test_str,
+            logger_window_buffer,
             device_windows_buffer,
             channel_windows_buffer,
-            value,
             windows_open,
             devices,
-            read_channel,
+            loggers,
             update_channel,
-            spawn_logging_thread,
+            re,
+            ..
         } = self;
 
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
@@ -176,8 +185,13 @@ impl eframe::App for TemplateApp {
                         windows_open.modbus_device = !windows_open.modbus_device;
                     }
                 });
+                ui.menu_button("Logger", |ui| {
+                    if ui.button("Configure").clicked() {
+                        windows_open.logger_configure = !windows_open.logger_configure;
+                    }
+                });
                 ui.menu_button("Help", |ui| if ui.button("About").clicked() {});
-                ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                ui.with_layout(egui::Layout::right_to_left(), |_ui| {
                     // global_dark_light_mode_buttons(ui);
                 });
             });
@@ -284,10 +298,85 @@ impl eframe::App for TemplateApp {
                         }
                     });
                 });
+
             Window::new("Preferences")
                 .open(&mut windows_open.preferences)
                 .show(ctx, |ui| {
                     ctx.settings_ui(ui);
+                });
+            Window::new("Configure Logger")
+                .open(&mut windows_open.logger_configure)
+                .show(ctx, |ui| {
+                    Grid::new("Logger List")
+                        .striped(true)
+                        .num_columns(2)
+                        .show(ui, |ui| {
+                            ui.label("Logger name:");
+                            ui.add(egui::TextEdit::singleline(
+                                &mut logger_window_buffer.logger_name,
+                            ));
+                            ui.end_row();
+                            ui.label("Type");
+                            ComboBox::from_label("")
+                                .selected_text(format!("{}", logger_window_buffer.logger_type))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut logger_window_buffer.logger_type,
+                                        LoggerType::DataBase,
+                                        "Database",
+                                    );
+                                    ui.selectable_value(
+                                        &mut logger_window_buffer.logger_type,
+                                        LoggerType::TextFile,
+                                        "Text File",
+                                    );
+                                });
+                            ui.end_row();
+                            ui.label("Log rate:");
+                            ui.add(
+                                Slider::new(&mut logger_window_buffer.log_rate, 1..=900)
+                                    .text("Seconds"),
+                            );
+                            ui.end_row();
+                            ui.label("Channel pattern:");
+                            ui.add(
+                                egui::TextEdit::singleline(
+                                    &mut logger_window_buffer.channel_pattern.pattern,
+                                )
+                                .hint_text("Ex: CH1-CH7, CH10-CH20"),
+                            );
+                            ui.end_row();
+                            match parse_pattern(&logger_window_buffer.channel_pattern, &re) {
+                                Ok(channels) => {
+                                    ui.colored_label(
+                                        Color32::DARK_GREEN,
+                                        format!("{} channels will be logged.", &channels.len()),
+                                    );
+                                }
+                                Err(e) => {
+                                    ui.colored_label(Color32::RED, format!("{}", e));
+                                }
+                            }
+                            ui.end_row();
+                            if ui.button("Save logger").clicked() {
+                                if let Some(path) = FileDialog::new().set_directory(".").save_file()
+                                {
+                                    logger_window_buffer.path = path;
+                                }
+                            }
+                            ui.label(format!("{}", &logger_window_buffer.path.to_str().unwrap()));
+                            ui.end_row();
+                            ui.label("Logger list");
+                            ui.end_row();
+                            for logger in loggers {
+                                ui.label("Name:");
+                                ui.label(format!("{}", &logger.name));
+                                ui.end_row();
+                                ui.label("Number of channels:");
+                                ui.label(format!("{}", &logger.channels.len()));
+                                ui.end_row();
+                            }
+                        });
                 });
             Window::new("Channel Configuration")
                 .open(&mut windows_open.channel_config)
