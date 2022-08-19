@@ -7,6 +7,8 @@ use alarm::*;
 use serde::{Deserialize, Serialize};
 use tokio_modbus::prelude::{sync::Context, *};
 
+use crate::LoggerChannel;
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum ValueType {
     Int16,
@@ -28,6 +30,7 @@ pub struct ChannelAlarm {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Channel {
     pub id: usize,
+    pub device_id: usize,
     pub tag: String,
     pub value_type: ValueType,
     pub access_type: AccessType,
@@ -40,6 +43,7 @@ pub struct Channel {
 impl Channel {
     pub fn new(
         id: usize,
+        device_id: usize,
         value_type: ValueType,
         access_type: AccessType,
         index: u16,
@@ -50,6 +54,7 @@ impl Channel {
         let value = 0.0;
         Self {
             id,
+            device_id,
             tag,
             value_type,
             access_type,
@@ -150,6 +155,7 @@ impl Default for Channel {
     fn default() -> Self {
         Self {
             id: 0,
+            device_id: 0,
             tag: "".to_owned(),
             value_type: ValueType::Int16,
             access_type: AccessType::Read,
@@ -176,7 +182,7 @@ impl Default for Channel {
 
 impl Display for Channel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CH{}", self.id)
+        write!(f, "D{}:CH{}", self.device_id, self.id)
     }
 }
 impl Display for ValueType {

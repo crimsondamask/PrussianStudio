@@ -1,13 +1,26 @@
+mod calculation;
 mod channel;
 mod modbus;
 
 use std::{error::Error, fmt::Display};
 
+pub use calculation::*;
 pub use channel::*;
 use serde::{Deserialize, Serialize};
 use tokio_modbus::{client::sync::Context, prelude::*};
 
 const NUM_CHANNELS: usize = 10;
+
+// pub trait LoggerChannel {
+//     fn id(&self) -> usize;
+//     fn value(&self) -> f32;
+// }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum LoggerChannel {
+    Channel(Channel),
+    Calculation(Calculation),
+}
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum DeviceType {

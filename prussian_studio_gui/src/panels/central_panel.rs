@@ -127,3 +127,5 @@ fn send_over_socket(socket: &mut WebSocket<MaybeTlsStream<TcpStream>>, data: &Da
         if let Ok(_) = socket.write_message(Message::Text(json)) {}
     }
 }
+
+fn spawn_device_thread(devices_to_read: Vec<Device>, data_to_serialize: DataSerialized) {}

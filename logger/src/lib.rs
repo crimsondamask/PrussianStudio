@@ -18,7 +18,7 @@ pub enum LoggerType {
 pub struct Logger {
     pub name: String,
     pub logger_type: LoggerType,
-    pub channels: Vec<Channel>,
+    pub channels: Vec<LoggerChannel>,
     pub path: PathBuf,
     pub log_rate: usize,
     pub is_logging: bool,
@@ -45,7 +45,7 @@ impl Logger {
         path: PathBuf,
         log_rate: usize,
         is_logging: bool,
-        re: &Regex,
+        re: (&Regex, &Regex),
     ) -> anyhow::Result<Self> {
         let channels = parse_pattern(channel_pattern, re)?;
 

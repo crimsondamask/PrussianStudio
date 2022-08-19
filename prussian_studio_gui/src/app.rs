@@ -48,7 +48,7 @@ pub struct TemplateApp {
     #[serde(skip)]
     pub spawn_logging_thread: bool,
     #[serde(skip)]
-    pub re: Regex,
+    pub re: (Regex, Regex),
 }
 
 impl Default for TemplateApp {
@@ -78,7 +78,10 @@ impl Default for TemplateApp {
             read_channel: None,
             update_channel: None,
             spawn_logging_thread: false,
-            re: Regex::new(r"CH+(?:([0-9]+))").unwrap(),
+            re: (
+                Regex::new(r"CH+(?:([0-9]+))").unwrap(),
+                Regex::new(r"EVAL+(?:([0-9]+))").unwrap(),
+            ),
         }
     }
 }
@@ -306,6 +309,7 @@ impl eframe::App for TemplateApp {
                 });
             Window::new("Configure Logger")
                 .open(&mut windows_open.logger_configure)
+                .scroll2([true, true])
                 .show(ctx, |ui| {
                     Grid::new("Logger List")
                         .striped(true)
@@ -343,10 +347,13 @@ impl eframe::App for TemplateApp {
                                 egui::TextEdit::singleline(
                                     &mut logger_window_buffer.channel_pattern.pattern,
                                 )
-                                .hint_text("Ex: CH1-CH7, CH10-CH20"),
+                                .hint_text("Ex: CH1-CH7, EVAL10-EVAL20"),
                             );
                             ui.end_row();
-                            match parse_pattern(&logger_window_buffer.channel_pattern, &re) {
+                            match parse_pattern(
+                                &logger_window_buffer.channel_pattern,
+                                (&re.0, &re.1),
+                            ) {
                                 Ok(channels) => {
                                     ui.colored_label(
                                         Color32::DARK_GREEN,
@@ -358,7 +365,7 @@ impl eframe::App for TemplateApp {
                                 }
                             }
                             ui.end_row();
-                            if ui.button("Save logger").clicked() {
+                            if ui.button("Path").clicked() {
                                 if let Some(path) = FileDialog::new().set_directory(".").save_file()
                                 {
                                     logger_window_buffer.path = path;
@@ -368,14 +375,39 @@ impl eframe::App for TemplateApp {
                             ui.end_row();
                             ui.label("Logger list");
                             ui.end_row();
-                            for logger in loggers {
+                            for logger in loggers.iter() {
                                 ui.label("Name:");
                                 ui.label(format!("{}", &logger.name));
                                 ui.end_row();
                                 ui.label("Number of channels:");
                                 ui.label(format!("{}", &logger.channels.len()));
                                 ui.end_row();
+                                ui.label("Type:");
+                                ui.label(format!("{}", &logger.logger_type));
+                                ui.end_row();
+                                ui.label("Logging rate:");
+                                ui.label(format!("{} seconds", &logger.log_rate));
+                                ui.end_row();
+                                ui.separator();
+                                ui.end_row();
                             }
+                            ui.vertical_centered_justified(|ui| {
+                                if ui.button("Save").clicked() {
+                                    let logger = Logger::new(
+                                        logger_window_buffer.logger_name.clone(),
+                                        logger_window_buffer.logger_type.clone(),
+                                        &mut logger_window_buffer.channel_pattern,
+                                        logger_window_buffer.path.clone(),
+                                        logger_window_buffer.log_rate,
+                                        false,
+                                        (&re.0, &re.1),
+                                    );
+
+                                    if let Ok(logger) = logger {
+                                        loggers.push(logger);
+                                    }
+                                }
+                            });
                         });
                 });
             Window::new("Channel Configuration")
