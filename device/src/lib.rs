@@ -1,26 +1,20 @@
 mod calculation;
 mod channel;
+mod config;
+mod logger_channel;
 mod modbus;
 
 use std::{error::Error, fmt::Display};
 
 pub use calculation::*;
 pub use channel::*;
+pub use config::*;
+pub use logger_channel::*;
 use serde::{Deserialize, Serialize};
 use tokio_modbus::{client::sync::Context, prelude::*};
+use tokio_serial;
 
 const NUM_CHANNELS: usize = 10;
-
-// pub trait LoggerChannel {
-//     fn id(&self) -> usize;
-//     fn value(&self) -> f32;
-// }
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub enum LoggerChannel {
-    Channel(Channel),
-    Calculation(Calculation),
-}
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum DeviceType {
@@ -29,11 +23,11 @@ pub enum DeviceType {
     WebSocketServer,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct DeviceConfig {
-    pub address: String,
-    pub port: usize,
-}
+// #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+// pub struct DeviceConfig {
+//     pub address: String,
+//     pub port: usize,
+// }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Device {
@@ -60,12 +54,22 @@ impl Device {
             status,
         }
     }
-    pub fn tcp_connect(&mut self) -> Result<Context, Box<dyn Error>> {
-        let ip = &self.config.address;
-        let port = &self.config.port;
-        let socket = format!("{}:{}", ip, port).parse()?;
-
-        let mut ctx = sync::tcp::connect(socket)?;
+    pub fn connect(&mut self) -> Result<Context, Box<dyn Error>> {
+        let ctx = match &self.config {
+            DeviceConfig::Tcp(config) => {
+                let address = config.address.to_owned();
+                let port = config.port;
+                let socket = format!("{}:{}", address, port).parse()?;
+                sync::tcp::connect(socket)?
+            }
+            DeviceConfig::Serial(config) => {
+                let path = config.com_port.to_owned();
+                let baudrate = config.baudrate;
+                let slave = Slave(config.slave);
+                let builder = tokio_serial::new(path, baudrate);
+                sync::rtu::connect_slave(&builder, slave)?
+            }
+        };
         // for channel in &mut self.channels {
         // channel.read_value(&mut ctx);
         // }
@@ -77,6 +81,10 @@ impl Device {
 impl Default for Device {
     fn default() -> Self {
         let mut channels = Vec::new();
+        let config = DeviceConfig::Tcp(TcpConfig {
+            address: "127.0.0.1".to_owned(),
+            port: 502,
+        });
         for i in 0..NUM_CHANNELS {
             let channel = Channel {
                 id: i,
@@ -87,10 +95,7 @@ impl Default for Device {
         Device {
             name: "".to_owned(),
             device_type: DeviceType::Modbus,
-            config: DeviceConfig {
-                address: "127.0.0.1".to_owned(),
-                port: 5502,
-            },
+            config,
             channels,
             status: "Initialized".to_owned(),
         }

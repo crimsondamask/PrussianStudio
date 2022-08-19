@@ -4,17 +4,12 @@ use crate::crossbeam::CrossBeamChannel;
 use crossbeam_channel::unbounded;
 use egui::{ComboBox, Context, InnerResponse};
 use lib_device::*;
-use rand::Rng;
 use std::net::TcpStream;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use tungstenite::protocol::WebSocketContext;
 use tungstenite::stream::MaybeTlsStream;
 
-use serde::{Deserialize, Serialize};
-use serde_json::Result;
+use serde::Serialize;
 use tungstenite::{connect, Message, WebSocket};
 use url::Url;
 // use tokio_modbus::prelude::*;
@@ -110,7 +105,7 @@ fn spawn_device_thread(
         let (mut socket, _) =
             connect(Url::parse("ws://localhost:12345/socket").unwrap()).expect("Can't connect.");
 
-        match devices_to_read[0].tcp_connect() {
+        match devices_to_read[0].connect() {
             Ok(mut ctx) => {
                 println!("Connected.");
                 devices_to_read[0].status = "Connected.".to_owned();

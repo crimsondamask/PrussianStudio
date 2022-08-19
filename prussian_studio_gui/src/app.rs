@@ -4,7 +4,7 @@ use crate::{
     crossbeam::CrossBeamChannel,
     fonts::*,
     panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel},
-    window::*,
+    window::{DeviceType, *},
 };
 use egui::{global_dark_light_mode_buttons, Color32, ComboBox, Rounding, Window};
 use egui::{Button, Grid, Slider};
@@ -173,6 +173,7 @@ impl eframe::App for TemplateApp {
                     ui.separator();
                     ui.menu_button("PLC", |ui| {
                         if ui.button("Configure").clicked() {
+                            device_windows_buffer.status = "".to_owned();
                             windows_open.plc = !windows_open.plc;
                         }
                         if ui.button("Channels").clicked() {
@@ -537,21 +538,49 @@ impl eframe::App for TemplateApp {
                         ui.label("Device name:");
                         ui.text_edit_singleline(&mut device_windows_buffer.name);
                         ui.end_row();
-                        ui.label("IP address:");
-                        ui.text_edit_singleline(&mut device_windows_buffer.address);
-                        ui.end_row();
-                        ui.label("Port:");
-                        ui.text_edit_singleline(&mut device_windows_buffer.port);
-                        ui.end_row();
+                        match device_windows_buffer.device_type {
+                            DeviceType::Tcp => {
+                                ui.label("IP address:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.address);
+                                ui.end_row();
+                                ui.label("Port:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.port);
+                                ui.end_row();
+                            }
+                            DeviceType::Serial => {
+                                ui.label("COM port:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.path);
+                                ui.end_row();
+                                ui.label("Baudrate:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.baudrate);
+                                ui.end_row();
+                                ui.label("Slave:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.slave);
+                                ui.end_row();
+                            }
+                        }
                     });
                     ui.vertical_centered_justified(|ui| {
                         if ui.button("Save").clicked() {
-                            if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
-                                devices[0].name = device_windows_buffer.name.clone();
-                                devices[0].config.address = device_windows_buffer.address.clone();
-                                devices[0].config.port = port;
+                            match device_windows_buffer.device_type {
+                                DeviceType::Tcp => {
+                                    if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
+                                        let config = DeviceConfig::Tcp(TcpConfig {
+                                            address: device_windows_buffer.address.to_owned(),
+                                            port,
+                                        });
+                                        devices[0].name = device_windows_buffer.name.clone();
+                                        devices[0].config = config;
+                                        device_windows_buffer.status =
+                                            "Device configuration saved successfully!".to_owned();
+                                    } else {
+                                        device_windows_buffer.status = "Error!".to_owned();
+                                    }
+                                }
+                                DeviceType::Serial => {}
                             }
                         }
+                        ui.label(device_windows_buffer.status.to_owned());
                     });
                 });
             Window::new("Modbus Device")

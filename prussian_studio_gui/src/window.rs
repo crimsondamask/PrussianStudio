@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::{default, path::PathBuf};
 
-use lib_device::{AccessType, Channel, Device, ValueType};
+use lib_device::{AccessType, Channel, Device, DeviceConfig, ValueType};
 use lib_logger::{ChannelPattern, LoggerType};
 use serde::{Deserialize, Serialize};
 
@@ -18,10 +18,22 @@ pub struct WindowsOpen {
     pub logger_configure: bool,
 }
 #[derive(Default, Serialize, Deserialize)]
+pub enum DeviceType {
+    #[default]
+    Tcp,
+    Serial,
+}
+#[derive(Default, Serialize, Deserialize)]
 pub struct DeviceWindowsBuffer {
+    pub device_type: DeviceType,
     pub name: String,
     pub address: String,
+    pub path: String,
     pub port: String,
+    pub baudrate: String,
+    pub slave: String,
+    pub config: DeviceConfig,
+    pub status: String,
 }
 #[derive(Default, Serialize, Deserialize)]
 pub struct ChannelWindowsBuffer {

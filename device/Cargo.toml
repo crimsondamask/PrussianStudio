@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] } # You only need this if you want app persistence
-tokio-modbus = { version = "0.5.3", features = ["sync"] }
+tokio-modbus = { version = "0.5.3", features = ["sync", "rtu"] }
+tokio-serial = "5.4.3"
