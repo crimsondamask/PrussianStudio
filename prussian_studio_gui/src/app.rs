@@ -1,28 +1,27 @@
-// use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
-
 use crate::{
-    crossbeam::CrossBeamChannel,
+    crossbeam::DeviceBeam,
     fonts::*,
     panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel},
     window::{DeviceType, *},
 };
-use egui::{global_dark_light_mode_buttons, Color32, ComboBox, Rounding, Window};
-use egui::{Button, Grid, Slider};
+
 pub use lib_device::Channel;
 pub use lib_device::*;
 pub use lib_logger::{parse_pattern, Logger, LoggerType};
+
+use egui::{Button, Grid, Slider};
+use egui::{Color32, ComboBox, Rounding, Window};
 use regex::Regex;
 use rfd::FileDialog;
-
+use std::net::TcpStream;
+use tungstenite::stream::MaybeTlsStream;
+use tungstenite::{connect, WebSocket};
+use url::Url;
 const NUM_CHANNELS: usize = 10;
 
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // Example stuff:
-
-    // this how you opt-out of serialization of a member
     #[serde(skip)]
     pub test_str: String,
     pub logger_window_buffer: LoggerWindowBuffer,
@@ -33,21 +32,22 @@ pub struct TemplateApp {
     pub value: f32,
     #[serde(skip)]
     pub windows_open: WindowsOpen,
-    // #[serde(skip)]
     pub devices: Vec<Device>,
     pub loggers: Vec<Logger>,
     #[serde(skip)]
-    pub read_channel: Option<CrossBeamChannel>,
-    #[serde(skip)]
-    pub update_channel: Option<CrossBeamChannel>,
+    pub device_beam: Vec<DeviceBeam>,
     #[serde(skip)]
     pub spawn_logging_thread: bool,
     #[serde(skip)]
     pub re: (Regex, Regex),
+    #[serde(skip)]
+    pub socket: WebSocket<MaybeTlsStream<TcpStream>>,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
+        let (socket, _) =
+            connect(Url::parse("ws://localhost:12345/socket").unwrap()).expect("Can't connect.");
         Self {
             // Example stuff:
             test_str: String::new(),
@@ -70,13 +70,13 @@ impl Default for TemplateApp {
                 },
             ],
             loggers: Vec::new(),
-            read_channel: None,
-            update_channel: None,
+            device_beam: Vec::new(),
             spawn_logging_thread: false,
             re: (
                 Regex::new(r"CH+(?:([0-9]+))").unwrap(),
                 Regex::new(r"EVAL+(?:([0-9]+))").unwrap(),
             ),
+            socket,
         }
     }
 }
@@ -132,7 +132,7 @@ impl eframe::App for TemplateApp {
             windows_open,
             devices,
             loggers,
-            update_channel,
+            device_beam,
             re,
             ..
         } = self;
@@ -290,8 +290,12 @@ impl eframe::App for TemplateApp {
                             {
                                 devices[0].channels[channel_windows_buffer.selected_channel.id]
                                     .value = value;
-                                if let Some(updated_channel) = update_channel {
-                                    if let Ok(_) = updated_channel.send.send(devices.to_vec()) {}
+
+                                if let Some(device_beam) = device_beam.iter().nth(0) {
+                                    if let Some(updated_channel) = device_beam.update.clone() {
+                                        if let Ok(_) = updated_channel.send.send(devices.to_vec()) {
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -523,8 +527,10 @@ impl eframe::App for TemplateApp {
                         if ui.button("Save").clicked() {
                             devices[0].channels[channel_windows_buffer.selected_channel.id] =
                                 channel_windows_buffer.edited_channel.clone();
-                            if let Some(updated_channel) = update_channel {
-                                if let Ok(_) = updated_channel.send.send(devices.to_vec()) {}
+                            if let Some(device_beam) = device_beam.iter().nth(0) {
+                                if let Some(updated_channel) = device_beam.update.clone() {
+                                    if let Ok(_) = updated_channel.send.send(devices.to_vec()) {}
+                                }
                             }
                         }
                     });
@@ -586,7 +592,58 @@ impl eframe::App for TemplateApp {
             Window::new("Modbus Device")
                 .open(&mut windows_open.modbus_device)
                 .scroll2([false, true])
-                .show(ctx, |ui| {});
+                .show(ctx, |ui| {
+                    ui.label("Configuration");
+                    ui.separator();
+                    egui::Grid::new("add_device").num_columns(2).show(ui, |ui| {
+                        ui.label("Device name:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.name);
+                        ui.end_row();
+                        match device_windows_buffer.device_type {
+                            DeviceType::Tcp => {
+                                ui.label("IP address:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.address);
+                                ui.end_row();
+                                ui.label("Port:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.port);
+                                ui.end_row();
+                            }
+                            DeviceType::Serial => {
+                                ui.label("COM port:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.path);
+                                ui.end_row();
+                                ui.label("Baudrate:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.baudrate);
+                                ui.end_row();
+                                ui.label("Slave:");
+                                ui.text_edit_singleline(&mut device_windows_buffer.slave);
+                                ui.end_row();
+                            }
+                        }
+                    });
+                    ui.vertical_centered_justified(|ui| {
+                        if ui.button("Save").clicked() {
+                            match device_windows_buffer.device_type {
+                                DeviceType::Tcp => {
+                                    if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
+                                        let config = DeviceConfig::Tcp(TcpConfig {
+                                            address: device_windows_buffer.address.to_owned(),
+                                            port,
+                                        });
+                                        devices[1].name = device_windows_buffer.name.clone();
+                                        devices[1].config = config;
+                                        device_windows_buffer.status =
+                                            "Device configuration saved successfully!".to_owned();
+                                    } else {
+                                        device_windows_buffer.status = "Error!".to_owned();
+                                    }
+                                }
+                                DeviceType::Serial => {}
+                            }
+                        }
+                        ui.label(device_windows_buffer.status.to_owned());
+                    });
+                });
             Window::new("Add Device")
                 .open(&mut windows_open.new_device)
                 .show(ctx, |ui| {});

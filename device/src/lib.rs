@@ -70,9 +70,6 @@ impl Device {
                 sync::rtu::connect_slave(&builder, slave)?
             }
         };
-        // for channel in &mut self.channels {
-        // channel.read_value(&mut ctx);
-        // }
 
         Ok(ctx)
     }

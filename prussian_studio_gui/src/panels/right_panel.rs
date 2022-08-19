@@ -18,6 +18,9 @@ pub fn right_panel(ctx: &Context, app: &TemplateApp) -> InnerResponse<()> {
             ui.label(format!("{}", app.devices[0]));
             ui.label(format!("{}", app.devices[0].status));
             ui.end_row();
+            ui.label(format!("{}", app.devices[1]));
+            ui.label(format!("{}", app.devices[1].status));
+            ui.end_row();
         });
     })
 }
