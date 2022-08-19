@@ -1,6 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 mod app;
+mod crossbeam;
 mod fonts;
 mod panels;
 mod window;

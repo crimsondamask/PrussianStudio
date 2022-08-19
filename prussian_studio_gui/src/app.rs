@@ -1,6 +1,7 @@
 // use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 use crate::{
+    crossbeam::CrossBeamChannel,
     fonts::*,
     panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel},
     window::*,
@@ -36,15 +37,9 @@ pub struct TemplateApp {
     pub devices: Vec<Device>,
     pub loggers: Vec<Logger>,
     #[serde(skip)]
-    pub read_channel: Option<(
-        crossbeam_channel::Sender<Vec<Device>>,
-        crossbeam_channel::Receiver<Vec<Device>>,
-    )>,
+    pub read_channel: Option<CrossBeamChannel>,
     #[serde(skip)]
-    pub update_channel: Option<(
-        crossbeam_channel::Sender<Vec<Device>>,
-        crossbeam_channel::Receiver<Vec<Device>>,
-    )>,
+    pub update_channel: Option<CrossBeamChannel>,
     #[serde(skip)]
     pub spawn_logging_thread: bool,
     #[serde(skip)]
@@ -295,7 +290,7 @@ impl eframe::App for TemplateApp {
                                 devices[0].channels[channel_windows_buffer.selected_channel.id]
                                     .value = value;
                                 if let Some(updated_channel) = update_channel {
-                                    if let Ok(_) = updated_channel.0.send(devices.to_vec()) {}
+                                    if let Ok(_) = updated_channel.send.send(devices.to_vec()) {}
                                 }
                             }
                         }
@@ -528,7 +523,7 @@ impl eframe::App for TemplateApp {
                             devices[0].channels[channel_windows_buffer.selected_channel.id] =
                                 channel_windows_buffer.edited_channel.clone();
                             if let Some(updated_channel) = update_channel {
-                                if let Ok(_) = updated_channel.0.send(devices.to_vec()) {}
+                                if let Ok(_) = updated_channel.send.send(devices.to_vec()) {}
                             }
                         }
                     });
