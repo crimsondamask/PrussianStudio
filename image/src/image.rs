@@ -12,8 +12,8 @@ pub struct RetainedImage {
     image: Mutex<egui::ColorImage>,
     /// Lazily loaded when we have an egui context.
     texture: Mutex<Option<egui::TextureHandle>>,
-    // filter: TextureFilter,
 }
+
 impl RetainedImage {
     pub fn from_color_image(debug_name: impl Into<String>, image: ColorImage) -> Self {
         Self {
@@ -21,7 +21,6 @@ impl RetainedImage {
             size: image.size,
             image: Mutex::new(image),
             texture: Default::default(),
-            // filter: Default::default(),
         }
     }
 
@@ -98,6 +97,16 @@ impl RetainedImage {
         self.size
     }
 
+    /// The width of the image.
+    pub fn width(&self) -> usize {
+        self.size[0]
+    }
+
+    /// The height of the image.
+    pub fn height(&self) -> usize {
+        self.size[1]
+    }
+
     /// The size of the image data (number of pixels wide/high).
     pub fn size_vec2(&self) -> egui::Vec2 {
         let [w, h] = self.size();
@@ -147,6 +156,37 @@ impl RetainedImage {
         ui.image(self.texture_id(ui.ctx()), desired_size)
     }
 }
+
+// ----------------------------------------------------------------------------
+
+use egui::ColorImage;
+
+/// Load a (non-svg) image.
+///
+/// Requires the "image" feature. You must also opt-in to the image formats you need
+/// with e.g. `image = { version = "0.24", features = ["jpeg", "png"] }`.
+///
+/// # Errors
+/// On invalid image or unsupported image format.
+#[cfg(feature = "image")]
+pub fn load_image_bytes(image_bytes: &[u8]) -> Result<egui::ColorImage, String> {
+    let image = image::load_from_memory(image_bytes).map_err(|err| err.to_string())?;
+    let size = [image.width() as _, image.height() as _];
+    let image_buffer = image.to_rgba8();
+    let pixels = image_buffer.as_flat_samples();
+    Ok(egui::ColorImage::from_rgba_unmultiplied(
+        size,
+        pixels.as_slice(),
+    ))
+}
+
+/// Load an SVG and rasterize it into an egui image.
+///
+/// Requires the "svg" feature.
+///
+/// # Errors
+/// On invalid image
+#[cfg(feature = "svg")]
 pub fn load_svg_bytes(svg_bytes: &[u8]) -> Result<egui::ColorImage, String> {
     let mut opt = usvg::Options::default();
     opt.fontdb.load_system_fonts();
@@ -173,27 +213,4 @@ pub fn load_svg_bytes(svg_bytes: &[u8]) -> Result<egui::ColorImage, String> {
     );
 
     Ok(image)
-}
-
-// ----------------------------------------------------------------------------
-
-use egui::ColorImage;
-
-/// Load a (non-svg) image.
-///
-/// Requires the "image" feature. You must also opt-in to the image formats you need
-/// with e.g. `image = { version = "0.24", features = ["jpeg", "png"] }`.
-///
-/// # Errors
-/// On invalid image or unsupported image format.
-#[cfg(feature = "image")]
-pub fn load_image_bytes(image_bytes: &[u8]) -> Result<egui::ColorImage, String> {
-    let image = image::load_from_memory(image_bytes).map_err(|err| err.to_string())?;
-    let size = [image.width() as _, image.height() as _];
-    let image_buffer = image.to_rgba8();
-    let pixels = image_buffer.as_flat_samples();
-    Ok(egui::ColorImage::from_rgba_unmultiplied(
-        size,
-        pixels.as_slice(),
-    ))
 }

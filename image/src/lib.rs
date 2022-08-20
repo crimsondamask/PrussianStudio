@@ -16,7 +16,7 @@ pub mod image;
 mod layout;
 mod sizing;
 mod strip;
-mod table;
+// mod table;
 
 #[cfg(feature = "chrono")]
 pub use crate::datepicker::DatePickerButton;
@@ -25,7 +25,7 @@ pub use crate::image::RetainedImage;
 pub(crate) use crate::layout::StripLayout;
 pub use crate::sizing::Size;
 pub use crate::strip::*;
-pub use crate::table::*;
+// pub use crate::table::*;
 
 /// Log an error with either `tracing` or `eprintln`
 macro_rules! log_err {

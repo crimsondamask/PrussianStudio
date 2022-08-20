@@ -21,6 +21,10 @@ pub fn right_panel(ctx: &Context, app: &TemplateApp) -> InnerResponse<()> {
             ui.label(format!("{}", app.devices[1]));
             ui.label(format!("{}", app.devices[1].status));
             ui.end_row();
+
+            ui.end_row();
         });
+        // let max_size = ui.available_size();
+        // app.svg_logo.show_max_size(ui, max_size);
     })
 }

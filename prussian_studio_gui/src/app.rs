@@ -5,11 +5,12 @@ use crate::{
     window::{DeviceType, *},
 };
 
+use extras::RetainedImage;
 pub use lib_device::Channel;
 pub use lib_device::*;
 pub use lib_logger::{parse_pattern, Logger, LoggerType};
 
-use egui::{Button, Grid, Slider};
+use egui::{Button, ColorImage, Grid, Slider};
 use egui::{Color32, ComboBox, Rounding, Window};
 use regex::Regex;
 use rfd::FileDialog;
@@ -42,6 +43,8 @@ pub struct TemplateApp {
     pub re: (Regex, Regex),
     #[serde(skip)]
     pub socket: WebSocket<MaybeTlsStream<TcpStream>>,
+    #[serde(skip)]
+    pub svg_logo: RetainedImage,
 }
 
 impl Default for TemplateApp {
@@ -77,6 +80,8 @@ impl Default for TemplateApp {
                 Regex::new(r"EVAL+(?:([0-9]+))").unwrap(),
             ),
             socket,
+            svg_logo: RetainedImage::from_svg_bytes("svg_logo.svg", include_bytes!("svg_logo.svg"))
+                .unwrap(),
         }
     }
 }
@@ -134,6 +139,7 @@ impl eframe::App for TemplateApp {
             loggers,
             device_beam,
             re,
+            svg_logo,
             ..
         } = self;
 
@@ -143,9 +149,17 @@ impl eframe::App for TemplateApp {
                 ui.label("powered by ");
                 ui.hyperlink_to("PrussianStudio", "https://github.com/crimsondamask");
                 ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                    ui.spacing_mut().item_spacing.x = 200.0;
+                    ui.spacing_mut().item_spacing.x = 20.0;
                     ui.label("v0.1");
                     ui.horizontal(|ui| {
+                        let max_size = ui.available_size();
+                        svg_logo.show_max_size(
+                            ui,
+                            egui::Vec2 {
+                                x: max_size.x,
+                                y: 12.0,
+                            },
+                        );
                         ui.spacing_mut().item_spacing.x = 20.0;
                         ui.spinner();
                         ui.label("Status: Waiting...");
@@ -190,9 +204,6 @@ impl eframe::App for TemplateApp {
                     }
                 });
                 ui.menu_button("Help", |ui| if ui.button("About").clicked() {});
-                ui.with_layout(egui::Layout::right_to_left(), |_ui| {
-                    // global_dark_light_mode_buttons(ui);
-                });
             });
             Window::new("PLC Channels")
                 .open(&mut windows_open.device_channels)
