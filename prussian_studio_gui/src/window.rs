@@ -39,6 +39,7 @@ pub struct DeviceWindowsBuffer {
 #[derive(Default, Serialize, Deserialize)]
 pub struct ChannelWindowsBuffer {
     pub selected_device: Device,
+    pub device_id: usize,
     pub selected_channel: Channel,
     pub edited_channel: Channel,
     pub channel_write_value: Vec<String>,

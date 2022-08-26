@@ -10,7 +10,7 @@ pub use lib_device::Channel;
 pub use lib_device::*;
 pub use lib_logger::{parse_pattern, Logger, LoggerType};
 
-use egui::{Button, ColorImage, Grid, Slider};
+use egui::{Button, Grid, Slider};
 use egui::{Color32, ComboBox, Rounding, Window};
 use regex::Regex;
 use rfd::FileDialog;
@@ -58,6 +58,7 @@ impl Default for TemplateApp {
             device_windows_buffer: DeviceWindowsBuffer::default(),
             channel_windows_buffer: ChannelWindowsBuffer {
                 channel_write_value: vec![String::new(); NUM_CHANNELS],
+                device_id: 0,
                 ..Default::default()
             },
             value: 2.7,
@@ -192,15 +193,25 @@ impl eframe::App for TemplateApp {
                             device_windows_buffer.name = devices[0].name.clone();
                             device_windows_buffer.scan_rate = devices[0].scan_rate.clone();
                             device_windows_buffer.config = devices[0].config.clone();
-                            device_windows_buffer.status = "".to_owned();
                         }
                         if ui.button("Channels").clicked() {
                             windows_open.device_channels = !windows_open.device_channels;
+                            channel_windows_buffer.device_id = 0;
                         }
                     });
-                    if ui.button("Modbus Device").clicked() {
-                        windows_open.modbus_device = !windows_open.modbus_device;
-                    }
+                    ui.menu_button("Modbus Device", |ui| {
+                        if ui.button("Configure").clicked() {
+                            windows_open.modbus_device = !windows_open.modbus_device;
+                            device_windows_buffer.status = "".to_owned();
+                            device_windows_buffer.name = devices[1].name.clone();
+                            device_windows_buffer.scan_rate = devices[1].scan_rate.clone();
+                            device_windows_buffer.config = devices[1].config.clone();
+                        }
+                        if ui.button("Channels").clicked() {
+                            windows_open.device_channels = !windows_open.device_channels;
+                            channel_windows_buffer.device_id = 1;
+                        }
+                    });
                 });
                 ui.menu_button("Logger", |ui| {
                     if ui.button("Configure").clicked() {
@@ -218,7 +229,10 @@ impl eframe::App for TemplateApp {
                         .num_columns(8)
                         .min_col_width(160.0)
                         .show(ui, |ui| {
-                            if let Some(device) = &devices.iter().nth(0) {
+                            if let Some(device) =
+                                &devices.iter().nth(channel_windows_buffer.device_id)
+                            {
+                                ui.label(format!("{}", &device));
                                 ui.label("Device status:");
                                 ui.label(format!("{}", &device.status));
 
@@ -303,10 +317,13 @@ impl eframe::App for TemplateApp {
                                 [channel_windows_buffer.selected_channel.id]
                                 .parse::<f32>()
                             {
-                                devices[0].channels[channel_windows_buffer.selected_channel.id]
+                                devices[channel_windows_buffer.device_id].channels
+                                    [channel_windows_buffer.selected_channel.id]
                                     .value = value;
 
-                                if let Some(device_beam) = device_beam.iter().nth(0) {
+                                if let Some(device_beam) =
+                                    device_beam.iter().nth(channel_windows_buffer.device_id)
+                                {
                                     if let Some(updated_channel) = device_beam.update.clone() {
                                         if let Ok(_) = updated_channel.send.send(devices.to_vec()) {
                                         }
@@ -540,9 +557,12 @@ impl eframe::App for TemplateApp {
                         });
                     ui.vertical_centered_justified(|ui| {
                         if ui.button("Save").clicked() {
-                            devices[0].channels[channel_windows_buffer.selected_channel.id] =
+                            devices[channel_windows_buffer.device_id].channels
+                                [channel_windows_buffer.selected_channel.id] =
                                 channel_windows_buffer.edited_channel.clone();
-                            if let Some(device_beam) = device_beam.iter().nth(0) {
+                            if let Some(device_beam) =
+                                device_beam.iter().nth(channel_windows_buffer.device_id)
+                            {
                                 if let Some(updated_channel) = device_beam.update.clone() {
                                     if updated_channel.send.send(devices.to_vec()).is_ok() {}
                                 }
@@ -650,6 +670,9 @@ impl eframe::App for TemplateApp {
                                 ui.end_row();
                             }
                         }
+                        ui.label("Scan rate:");
+                        ui.add(Slider::new(&mut device_windows_buffer.scan_rate, 0..=60).text(""));
+                        ui.end_row();
                     });
                     ui.vertical_centered_justified(|ui| {
                         if ui.button("Save").clicked() {
