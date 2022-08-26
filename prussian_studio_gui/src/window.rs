@@ -34,6 +34,7 @@ pub struct DeviceWindowsBuffer {
     pub slave: String,
     pub config: DeviceConfig,
     pub status: String,
+    pub scan_rate: u64,
 }
 #[derive(Default, Serialize, Deserialize)]
 pub struct ChannelWindowsBuffer {

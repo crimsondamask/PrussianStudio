@@ -189,6 +189,10 @@ impl eframe::App for TemplateApp {
                         if ui.button("Configure").clicked() {
                             device_windows_buffer.status = "".to_owned();
                             windows_open.plc = !windows_open.plc;
+                            device_windows_buffer.name = devices[0].name.clone();
+                            device_windows_buffer.scan_rate = devices[0].scan_rate.clone();
+                            device_windows_buffer.config = devices[0].config.clone();
+                            device_windows_buffer.status = "".to_owned();
                         }
                         if ui.button("Channels").clicked() {
                             windows_open.device_channels = !windows_open.device_channels;
@@ -540,7 +544,7 @@ impl eframe::App for TemplateApp {
                                 channel_windows_buffer.edited_channel.clone();
                             if let Some(device_beam) = device_beam.iter().nth(0) {
                                 if let Some(updated_channel) = device_beam.update.clone() {
-                                    if let Ok(_) = updated_channel.send.send(devices.to_vec()) {}
+                                    if updated_channel.send.send(devices.to_vec()).is_ok() {}
                                 }
                             }
                         }
@@ -576,6 +580,9 @@ impl eframe::App for TemplateApp {
                                 ui.end_row();
                             }
                         }
+                        ui.label("Scan rate:");
+                        ui.add(Slider::new(&mut device_windows_buffer.scan_rate, 0..=60).text(""));
+                        ui.end_row();
                     });
                     ui.vertical_centered_justified(|ui| {
                         if ui.button("Save").clicked() {
@@ -588,8 +595,20 @@ impl eframe::App for TemplateApp {
                                         });
                                         devices[0].name = device_windows_buffer.name.clone();
                                         devices[0].config = config;
+                                        devices[0].scan_rate = device_windows_buffer.scan_rate;
                                         device_windows_buffer.status =
                                             "Device configuration saved successfully!".to_owned();
+                                        if let Some(device_beam) = device_beam.iter().nth(0) {
+                                            if let Some(updated_device) = device_beam.update.clone()
+                                            {
+                                                if updated_device
+                                                    .send
+                                                    .send(devices.to_vec())
+                                                    .is_ok()
+                                                {
+                                                }
+                                            }
+                                        }
                                     } else {
                                         device_windows_buffer.status = "Error!".to_owned();
                                     }
@@ -645,6 +664,17 @@ impl eframe::App for TemplateApp {
                                         devices[1].config = config;
                                         device_windows_buffer.status =
                                             "Device configuration saved successfully!".to_owned();
+                                        if let Some(device_beam) = device_beam.iter().nth(1) {
+                                            if let Some(updated_device) = device_beam.update.clone()
+                                            {
+                                                if updated_device
+                                                    .send
+                                                    .send(devices.to_vec())
+                                                    .is_ok()
+                                                {
+                                                }
+                                            }
+                                        }
                                     } else {
                                         device_windows_buffer.status = "Error!".to_owned();
                                     }

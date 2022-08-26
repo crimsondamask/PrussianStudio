@@ -35,6 +35,7 @@ pub struct Device {
     pub device_type: DeviceType,
     pub config: DeviceConfig,
     pub channels: Vec<Channel>,
+    pub scan_rate: u64,
     pub status: String,
 }
 
@@ -44,6 +45,7 @@ impl Device {
         device_type: DeviceType,
         config: DeviceConfig,
         channels: Vec<Channel>,
+        scan_rate: u64,
         status: String,
     ) -> Self {
         Self {
@@ -51,6 +53,7 @@ impl Device {
             device_type,
             config,
             channels,
+            scan_rate,
             status,
         }
     }
@@ -95,6 +98,7 @@ impl Default for Device {
             config,
             channels,
             status: "Initialized".to_owned(),
+            scan_rate: 1,
         }
     }
 }

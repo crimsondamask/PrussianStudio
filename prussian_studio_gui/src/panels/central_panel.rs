@@ -24,6 +24,7 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
         ui.label("Monitor");
         ui.separator();
 
+        // We check if the logging button has been pressed to spawn our threads.
         if app.spawn_logging_thread {
             app.spawn_logging_thread = !app.spawn_logging_thread;
             let devices_to_read = app.devices.clone();
@@ -60,6 +61,8 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
 
         egui::warn_if_debug_build(ui);
 
+        // We try to receive any pending messages from all the threads.
+        // Each thread has its own crossbeam channel.
         for i in 0..(num_devices) {
             if let Some(crossbeam) = &app.device_beam.iter().nth(i) {
                 if let Some(devices) = crossbeam.read.clone() {
@@ -78,22 +81,28 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
 
 fn send_over_socket(socket: &mut WebSocket<MaybeTlsStream<TcpStream>>, data: &DataSerialized) {
     if let Ok(json) = serde_json::to_string(data) {
-        if let Ok(_) = socket.write_message(Message::Text(json)) {}
+        if socket.write_message(Message::Text(json)).is_ok() {}
     }
 }
 
 fn spawn_device_thread(mut devices_to_read: Vec<Device>, device_beam: DeviceBeam, i: usize) {
     thread::spawn(move || {
-        match devices_to_read[i].connect() {
-            Ok(mut ctx) => {
-                devices_to_read[i].status = "Connected.".to_owned();
-                loop {
-                    thread::sleep(Duration::from_secs(1));
-                    if let Some(crossbeam_channel) = device_beam.update.clone() {
-                        if let Ok(received_devices) = crossbeam_channel.receive.try_recv() {
-                            devices_to_read = received_devices.clone();
-                        }
-                    }
+        // We reset the device status.
+        devices_to_read[i].status = "Initialized.".to_owned();
+        // We spin the loop that reads data from the device.
+        loop {
+            // This allows us to update the device config from the main thread.
+            if let Some(crossbeam_channel) = device_beam.update.clone() {
+                if let Ok(received_devices) = crossbeam_channel.receive.try_recv() {
+                    devices_to_read = received_devices.clone();
+                    devices_to_read[i].status = "Updated.".to_owned();
+                }
+            }
+            // Tries to connect to the device. This runs on every iteration of
+            // the loop which is a bit messy.
+            match devices_to_read[i].connect() {
+                Ok(mut ctx) => {
+                    devices_to_read[i].status = "Connected.".to_owned();
 
                     let channels = devices_to_read[i].channels.clone();
                     let mut channels_to_send = Vec::with_capacity(channels.len());
@@ -118,9 +127,11 @@ fn spawn_device_thread(mut devices_to_read: Vec<Device>, device_beam: DeviceBeam
                     if let Some(crossbeam_channel) = device_beam.read.clone() {
                         if let Ok(_) = crossbeam_channel.send.send(devices_to_read.clone()) {}
                     }
+                    // The thread sleeps.
+                    thread::sleep(Duration::from_secs(devices_to_read[i].scan_rate));
                 }
+                Err(e) => devices_to_read[i].status = format!("Error: {}", e),
             }
-            Err(e) => devices_to_read[i].status = format!("Error: {}", e),
         }
     });
 }
