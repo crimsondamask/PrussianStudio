@@ -4,7 +4,7 @@ use std::{fmt::Display, path::PathBuf};
 
 pub use channel_pattern::{parse_pattern, ChannelPattern};
 use chrono::prelude::*;
-use rusqlite::{Connection, Result};
+// use rusqlite::{Connection, Result};
 
 use lib_device::*;
 use serde::{Deserialize, Serialize};
@@ -59,9 +59,5 @@ impl Logger {
         };
 
         Ok(logger)
-    }
-
-    pub fn log_data(&self) -> Result<()> {
-        todo!()
     }
 }

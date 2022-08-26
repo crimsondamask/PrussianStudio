@@ -182,10 +182,9 @@ impl eframe::App for TemplateApp {
                     }
                 });
                 ui.menu_button("Devices", |ui| {
-                    if ui.button("Add new device").clicked() {
-                        windows_open.new_device = !windows_open.new_device;
-                    }
-                    ui.separator();
+                    // if ui.button("Add new device").clicked() {
+                    //     windows_open.new_device = !windows_open.new_device;
+                    // }
                     ui.menu_button("PLC", |ui| {
                         if ui.button("Configure").clicked() {
                             device_windows_buffer.status = "".to_owned();
@@ -199,6 +198,7 @@ impl eframe::App for TemplateApp {
                             channel_windows_buffer.device_id = 0;
                         }
                     });
+                    ui.separator();
                     ui.menu_button("Modbus Device", |ui| {
                         if ui.button("Configure").clicked() {
                             windows_open.modbus_device = !windows_open.modbus_device;
@@ -222,7 +222,7 @@ impl eframe::App for TemplateApp {
             });
             Window::new("PLC Channels")
                 .open(&mut windows_open.device_channels)
-                .scroll2([false, true])
+                .scroll2([true, true])
                 .show(ctx, |ui| {
                     Grid::new("Channel List")
                         .striped(true)
