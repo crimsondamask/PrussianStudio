@@ -9,8 +9,11 @@ use std::thread;
 use std::time::Duration;
 use tungstenite::stream::MaybeTlsStream;
 
+use anyhow;
 use serde::Serialize;
-use tungstenite::{Message, WebSocket};
+use tungstenite::Message;
+use tungstenite::{connect, WebSocket};
+use url::Url;
 
 #[derive(Serialize, Clone)]
 struct DataSerialized {
@@ -75,13 +78,33 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
         let data_to_serialize = DataSerialized {
             devices: app.devices.clone(),
         };
-        send_over_socket(&mut app.socket, &data_to_serialize);
+        // We send the data over the web socket and update our status.
+        app.status.websocket = match send_over_socket(&mut app.socket, &data_to_serialize) {
+            Ok(_) => "Connected to WebSocket.".to_owned(),
+            Err(e) => {
+                app.socket = None;
+                format!("ERROR: {}", e)
+            }
+        };
+
+        if !app.socket.is_some() {
+            if let Ok((socket, _)) = connect(Url::parse("ws://localhost:8080/socket").unwrap()) {
+                app.socket = Some(socket);
+            }
+        }
     })
 }
 
-fn send_over_socket(socket: &mut WebSocket<MaybeTlsStream<TcpStream>>, data: &DataSerialized) {
-    if let Ok(json) = serde_json::to_string(data) {
-        if socket.write_message(Message::Text(json)).is_ok() {}
+fn send_over_socket(
+    socket: &mut Option<WebSocket<MaybeTlsStream<TcpStream>>>,
+    data: &DataSerialized,
+) -> anyhow::Result<()> {
+    let json = serde_json::to_string(data)?;
+    if let Some(socket) = socket {
+        socket.write_message(Message::Text(json))?;
+        Ok(())
+    } else {
+        anyhow::bail!("There is no socket connected!")
     }
 }
 

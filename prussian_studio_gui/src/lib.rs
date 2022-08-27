@@ -4,6 +4,7 @@ mod app;
 mod crossbeam;
 mod fonts;
 mod panels;
+mod status;
 mod window;
 mod windows;
 pub use app::TemplateApp;

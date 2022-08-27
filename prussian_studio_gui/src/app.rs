@@ -2,6 +2,7 @@ use crate::{
     crossbeam::DeviceBeam,
     fonts::*,
     panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel},
+    status::Status,
     window::{DeviceType, *},
 };
 
@@ -25,6 +26,8 @@ const NUM_CHANNELS: usize = 10;
 pub struct TemplateApp {
     #[serde(skip)]
     pub test_str: String,
+    #[serde(skip)]
+    pub status: Status,
     pub logger_window_buffer: LoggerWindowBuffer,
     pub device_windows_buffer: DeviceWindowsBuffer,
     #[serde(skip)]
@@ -42,18 +45,21 @@ pub struct TemplateApp {
     #[serde(skip)]
     pub re: (Regex, Regex),
     #[serde(skip)]
-    pub socket: WebSocket<MaybeTlsStream<TcpStream>>,
+    pub socket: Option<WebSocket<MaybeTlsStream<TcpStream>>>,
     #[serde(skip)]
     pub svg_logo: RetainedImage,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
-        let (socket, _) =
-            connect(Url::parse("ws://localhost:12345/socket").unwrap()).expect("Can't connect.");
+        let socket = match connect(Url::parse("ws://localhost:8080/socket").unwrap()) {
+            Ok((socket, _)) => Some(socket),
+            Err(_) => None,
+        };
         Self {
             // Example stuff:
             test_str: String::new(),
+            status: Status::default(),
             logger_window_buffer: LoggerWindowBuffer::default(),
             device_windows_buffer: DeviceWindowsBuffer::default(),
             channel_windows_buffer: ChannelWindowsBuffer {
@@ -132,6 +138,7 @@ impl eframe::App for TemplateApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self {
             test_str,
+            status,
             logger_window_buffer,
             device_windows_buffer,
             channel_windows_buffer,
@@ -163,7 +170,7 @@ impl eframe::App for TemplateApp {
                         );
                         ui.spacing_mut().item_spacing.x = 20.0;
                         ui.spinner();
-                        ui.label("Status: Waiting...");
+                        ui.label(format!("{}", &status.websocket));
                     });
                 });
             });
