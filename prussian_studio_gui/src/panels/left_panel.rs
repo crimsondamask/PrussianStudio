@@ -7,12 +7,12 @@ pub fn left_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> {
         ui.label("Options");
         ui.separator();
         ui.group(|ui| {
-            if ui.button("HMI").clicked() {
+            // ui.toggle_value(&mut app.spawn_logging_thread, "Logging");
+            if ui.button("Launch HMI").clicked() {
                 Command::new("./PrussianStudio_HMI")
                     .spawn()
                     .expect("command failed to start");
             }
-            ui.toggle_value(&mut app.spawn_logging_thread, "Logging");
         });
     })
 }

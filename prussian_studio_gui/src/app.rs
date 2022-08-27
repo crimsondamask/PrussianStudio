@@ -81,7 +81,7 @@ impl Default for TemplateApp {
             ],
             loggers: Vec::new(),
             device_beam: Vec::new(),
-            spawn_logging_thread: false,
+            spawn_logging_thread: true,
             re: (
                 Regex::new(r"CH+(?:([0-9]+))").unwrap(),
                 Regex::new(r"EVAL+(?:([0-9]+))").unwrap(),
