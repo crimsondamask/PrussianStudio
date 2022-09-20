@@ -9,7 +9,7 @@ edition = "2021"
 log = "0.4"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 tokio = { version = "1.0.0", default-features = false, features = ["io-util"] }
-tokio-tungstenite = "0.17.2"
+tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
 futures-channel = "0.3.21"
 
 [dependencies.tungstenite]

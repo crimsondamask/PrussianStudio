@@ -31,6 +31,7 @@ pub enum DeviceType {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Device {
+    pub id: usize,
     pub name: String,
     pub device_type: DeviceType,
     pub config: DeviceConfig,
@@ -41,6 +42,7 @@ pub struct Device {
 
 impl Device {
     pub fn new(
+        id: usize,
         name: String,
         device_type: DeviceType,
         config: DeviceConfig,
@@ -49,6 +51,7 @@ impl Device {
         status: String,
     ) -> Self {
         Self {
+            id,
             name,
             device_type,
             config,
@@ -57,6 +60,31 @@ impl Device {
             status,
         }
     }
+    pub fn initialize(id: usize, name: String) -> Self {
+        let mut channels = Vec::new();
+        let config = DeviceConfig::Tcp(TcpConfig {
+            address: "127.0.0.1".to_owned(),
+            port: 502,
+        });
+        for i in 0..NUM_CHANNELS {
+            let channel = Channel {
+                id: i,
+                device_id: id,
+                ..Default::default()
+            };
+            channels.push(channel);
+        }
+        Device {
+            id,
+            name,
+            device_type: DeviceType::Modbus,
+            config,
+            channels,
+            status: "Initialized".to_owned(),
+            scan_rate: 1,
+        }
+    }
+    // To be replaced with a DOP function.
     pub fn connect(&mut self) -> Result<Context, Box<dyn Error>> {
         let ctx = match &self.config {
             DeviceConfig::Tcp(config) => {
@@ -93,6 +121,7 @@ impl Default for Device {
             channels.push(channel);
         }
         Device {
+            id: 0,
             name: "".to_owned(),
             device_type: DeviceType::Modbus,
             config,

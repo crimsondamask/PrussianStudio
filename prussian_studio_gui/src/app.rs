@@ -25,8 +25,6 @@ const NUM_CHANNELS: usize = 10;
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
     #[serde(skip)]
-    pub test_str: String,
-    #[serde(skip)]
     pub status: Status,
     pub logger_window_buffer: LoggerWindowBuffer,
     pub device_windows_buffer: DeviceWindowsBuffer,
@@ -52,13 +50,12 @@ pub struct TemplateApp {
 
 impl Default for TemplateApp {
     fn default() -> Self {
-        let socket = match connect(Url::parse("ws://localhost:8080/socket").unwrap()) {
+        let socket = match connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
             Ok((socket, _)) => Some(socket),
             Err(_) => None,
         };
         Self {
             // Example stuff:
-            test_str: String::new(),
             status: Status::default(),
             logger_window_buffer: LoggerWindowBuffer::default(),
             device_windows_buffer: DeviceWindowsBuffer::default(),
@@ -70,14 +67,8 @@ impl Default for TemplateApp {
             value: 2.7,
             windows_open: WindowsOpen::default(),
             devices: vec![
-                Device {
-                    name: "PLC".to_owned(),
-                    ..Default::default()
-                },
-                Device {
-                    name: "Modbus Device".to_owned(),
-                    ..Default::default()
-                },
+                Device::initialize(0, "PLC".to_owned()),
+                Device::initialize(1, "Modbus device".to_owned()),
             ],
             loggers: Vec::new(),
             device_beam: Vec::new(),
@@ -137,7 +128,6 @@ impl eframe::App for TemplateApp {
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self {
-            test_str,
             status,
             logger_window_buffer,
             device_windows_buffer,
@@ -233,7 +223,7 @@ impl eframe::App for TemplateApp {
                 .show(ctx, |ui| {
                     Grid::new("Channel List")
                         .striped(true)
-                        .num_columns(8)
+                        .num_columns(9)
                         .min_col_width(160.0)
                         .show(ui, |ui| {
                             if let Some(device) =
@@ -253,9 +243,10 @@ impl eframe::App for TemplateApp {
                                 ui.label("Value type");
                                 ui.label("Access");
                                 ui.label("Address");
+                                ui.label("Device");
                                 ui.label("Status");
                                 ui.end_row();
-                                for _ in 0..8 {
+                                for _ in 0..9 {
                                     ui.separator();
                                 }
                                 ui.end_row();
@@ -304,6 +295,7 @@ impl eframe::App for TemplateApp {
                                     ui.label(format!("{}", channel.value_type));
                                     ui.label(format!("{}", channel.access_type));
                                     ui.label(format!("{}", channel.index));
+                                    ui.label(format!("{}", channel.device_id));
                                     ui.label(format!("{}", channel.status));
                                     // if ui.small_button("Configure").clicked() {}
                                     ui.end_row();
