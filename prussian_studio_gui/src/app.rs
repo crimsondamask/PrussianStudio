@@ -1,5 +1,5 @@
 use crate::{
-    crossbeam::{CrossBeamSocketChannel, DeviceBeam},
+    crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
     fonts::*,
     panels::{central_panel::*, left_panel::left_panel, right_panel::right_panel},
     status::Status,
@@ -35,8 +35,12 @@ pub struct TemplateApp {
     pub windows_open: WindowsOpen,
     pub devices: Vec<Device>,
     pub loggers: Vec<Logger>,
+    // We use this beam to send and receive Device data and config.
     #[serde(skip)]
     pub device_beam: Vec<DeviceBeam>,
+    // We use this beam to send device reconnect requests.
+    #[serde(skip)]
+    pub device_msg_beam: Vec<DeviceMsgBeam>,
     // The crossbeam channel that we receive any write requests from the HMI on.
     #[serde(skip)]
     pub socket_channel: Option<CrossBeamSocketChannel>,
@@ -74,6 +78,7 @@ impl Default for TemplateApp {
             ],
             loggers: Vec::new(),
             device_beam: Vec::new(),
+            device_msg_beam: Vec::new(),
             socket_channel: None,
             spawn_logging_thread: true,
             re: (
@@ -139,6 +144,7 @@ impl eframe::App for TemplateApp {
             devices,
             loggers,
             device_beam,
+            device_msg_beam,
             re,
             svg_logo,
             ..
@@ -620,10 +626,19 @@ impl eframe::App for TemplateApp {
                                             port,
                                         });
                                         devices[0].name = device_windows_buffer.name.clone();
-                                        devices[0].config = config;
+                                        devices[0].config = config.clone();
                                         devices[0].scan_rate = device_windows_buffer.scan_rate;
                                         device_windows_buffer.status =
                                             "Device configuration saved successfully!".to_owned();
+                                        if let Some(device_msg) = device_msg_beam.iter().nth(0) {
+                                            if device_msg
+                                                .send
+                                                .send(DeviceMsg::Reconnect(config))
+                                                .is_ok()
+                                            {
+                                                println!("config sent!");
+                                            }
+                                        }
                                         if let Some(device_beam) = device_beam.iter().nth(0) {
                                             if let Some(updated_device) = device_beam.update.clone()
                                             {
@@ -690,9 +705,17 @@ impl eframe::App for TemplateApp {
                                             port,
                                         });
                                         devices[1].name = device_windows_buffer.name.clone();
-                                        devices[1].config = config;
+                                        devices[1].config = config.clone();
                                         device_windows_buffer.status =
                                             "Device configuration saved successfully!".to_owned();
+                                        if let Some(device_msg) = device_msg_beam.iter().nth(1) {
+                                            if device_msg
+                                                .send
+                                                .send(DeviceMsg::Reconnect(config))
+                                                .is_ok()
+                                            {
+                                            }
+                                        }
                                         if let Some(device_beam) = device_beam.iter().nth(1) {
                                             if let Some(updated_device) = device_beam.update.clone()
                                             {

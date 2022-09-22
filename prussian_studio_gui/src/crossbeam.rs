@@ -18,3 +18,9 @@ pub struct DeviceBeam {
     pub read: Option<CrossBeamChannel>,
     pub update: Option<CrossBeamChannel>,
 }
+
+#[derive(Clone)]
+pub struct DeviceMsgBeam {
+    pub send: crossbeam_channel::Sender<DeviceMsg>,
+    pub receive: crossbeam_channel::Receiver<DeviceMsg>,
+}

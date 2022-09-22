@@ -16,6 +16,11 @@ use tokio_serial;
 
 const NUM_CHANNELS: usize = 10;
 
+#[derive(Clone)]
+pub enum DeviceMsg {
+    Reconnect(DeviceConfig),
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum DeviceType {
     Modbus,
