@@ -80,7 +80,7 @@ impl Default for TemplateApp {
             device_beam: Vec::new(),
             device_msg_beam: Vec::new(),
             socket_channel: None,
-            spawn_logging_thread: true,
+            spawn_logging_thread: false,
             re: (
                 Regex::new(r"CH+(?:([0-9]+))").unwrap(),
                 Regex::new(r"EVAL+(?:([0-9]+))").unwrap(),
@@ -145,6 +145,7 @@ impl eframe::App for TemplateApp {
             loggers,
             device_beam,
             device_msg_beam,
+            spawn_logging_thread,
             re,
             svg_logo,
             ..
@@ -229,6 +230,16 @@ impl eframe::App for TemplateApp {
                     }
                 });
                 ui.menu_button("Help", |ui| if ui.button("About").clicked() {});
+
+                ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                    ui.spacing_mut().item_spacing.x = 20.0;
+                    ui.label("");
+                    ui.add_enabled_ui(!*spawn_logging_thread, |ui| {
+                        if ui.button("▶ Start").clicked() {
+                            *spawn_logging_thread = true;
+                        }
+                    });
+                });
             });
             Window::new("PLC Channels")
                 .open(&mut windows_open.device_channels)
