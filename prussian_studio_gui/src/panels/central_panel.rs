@@ -1,4 +1,4 @@
-use crate::crossbeam::CrossBeamChannel;
+use crate::crossbeam::{CrossBeamChannel, CrossBeamSocketChannel};
 use crate::{app::TemplateApp, crossbeam::DeviceBeam};
 // use crate::window::*;
 use crossbeam_channel::unbounded;
@@ -10,7 +10,7 @@ use std::time::Duration;
 use tungstenite::stream::MaybeTlsStream;
 
 use anyhow;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tungstenite::Message;
 use tungstenite::{connect, WebSocket};
 use url::Url;
@@ -18,6 +18,12 @@ use url::Url;
 #[derive(Serialize, Clone)]
 struct DataSerialized {
     devices: Vec<Device>,
+}
+#[derive(Deserialize, Clone, PartialEq)]
+pub struct JsonWriteChannel {
+    pub device_id: usize,
+    pub channel: usize,
+    pub value: f32,
 }
 
 pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> {
@@ -31,6 +37,20 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
         if app.spawn_logging_thread {
             app.spawn_logging_thread = !app.spawn_logging_thread;
             let devices_to_read = app.devices.clone();
+
+            let (socket_s, socket_r): (
+                crossbeam_channel::Sender<JsonWriteChannel>,
+                crossbeam_channel::Receiver<JsonWriteChannel>,
+            ) = unbounded();
+            // We construct the channel for writing values from HMI.
+            let socket_channel = CrossBeamSocketChannel {
+                send: socket_s,
+                receive: socket_r,
+            };
+
+            app.socket_channel = Some(socket_channel.clone());
+
+            spawn_socket_recv(socket_channel);
 
             for i in 0..(num_devices) {
                 let (read_s, read_r): (
@@ -58,7 +78,7 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
                 app.device_beam.push(device_beam.clone());
 
                 spawn_device_thread(devices_to_read.clone(), device_beam.clone(), i);
-                println!("Received.");
+                //println!("Received.");
             }
         }
 
@@ -75,10 +95,14 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
                 }
             }
         }
+
+        // We check if there is any new message from the HMI recv thread and update the corresponding device.
+        write_channel_from_hmi(app);
+
         let data_to_serialize = DataSerialized {
             devices: app.devices.clone(),
         };
-        // We send the data over the web socket and update our status.
+        // We send the data over the web socket to the HMI and update our status.
         app.status.websocket = match send_over_socket(&mut app.socket, &data_to_serialize) {
             Ok(_) => "Connected to WebSocket.".to_owned(),
             Err(e) => {
@@ -93,6 +117,29 @@ pub fn central_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> 
             }
         }
     })
+}
+
+fn write_channel_from_hmi(app: &mut TemplateApp) {
+    let socket_channel = &app.socket_channel;
+    if let Some(socket_channel) = socket_channel {
+        if let Ok(json_channel) = socket_channel.receive.try_recv() {
+            match app.devices[json_channel.device_id].channels[json_channel.channel].access_type {
+                AccessType::Write => {
+                    app.devices[json_channel.device_id].channels[json_channel.channel].value =
+                        json_channel.value;
+                    println!("channel modified");
+                    if let Some(device_beam) = app.device_beam.iter().nth(json_channel.device_id) {
+                        if let Some(updated_channel) = device_beam.update.clone() {
+                            if let Ok(_) = updated_channel.send.send(app.devices.to_vec()) {
+                                println!("Sent the write update to the device worker.");
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 fn send_over_socket(
@@ -161,4 +208,19 @@ fn start_thread_loop(device_beam: DeviceBeam, mut devices_to_read: Vec<Device>, 
             Err(e) => devices_to_read[i].status = format!("Error: {}", e),
         }
     }
+}
+
+pub fn spawn_socket_recv(socket_channel: CrossBeamSocketChannel) {
+    thread::spawn(move || {
+        if let Ok((mut socket, _)) = connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
+            loop {
+                let msg = socket.read_message().expect("Error reading message");
+                if let Ok(json_write_channel) = serde_json::from_str(msg.to_text().unwrap()) {
+                    if socket_channel.send.send(json_write_channel).is_ok() {
+                        println!("Channel serialized!");
+                    }
+                }
+            }
+        };
+    });
 }

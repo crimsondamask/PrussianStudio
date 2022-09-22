@@ -1,7 +1,7 @@
 use crate::{
-    crossbeam::DeviceBeam,
+    crossbeam::{CrossBeamSocketChannel, DeviceBeam},
     fonts::*,
-    panels::{central_panel::central_panel, left_panel::left_panel, right_panel::right_panel},
+    panels::{central_panel::*, left_panel::left_panel, right_panel::right_panel},
     status::Status,
     window::{DeviceType, *},
 };
@@ -19,6 +19,7 @@ use std::net::TcpStream;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{connect, WebSocket};
 use url::Url;
+
 const NUM_CHANNELS: usize = 10;
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -31,13 +32,15 @@ pub struct TemplateApp {
     #[serde(skip)]
     pub channel_windows_buffer: ChannelWindowsBuffer,
     #[serde(skip)]
-    pub value: f32,
-    #[serde(skip)]
     pub windows_open: WindowsOpen,
     pub devices: Vec<Device>,
     pub loggers: Vec<Logger>,
     #[serde(skip)]
     pub device_beam: Vec<DeviceBeam>,
+    // The crossbeam channel that we receive any write requests from the HMI on.
+    #[serde(skip)]
+    pub socket_channel: Option<CrossBeamSocketChannel>,
+    // ---------------------
     #[serde(skip)]
     pub spawn_logging_thread: bool,
     #[serde(skip)]
@@ -64,7 +67,6 @@ impl Default for TemplateApp {
                 device_id: 0,
                 ..Default::default()
             },
-            value: 2.7,
             windows_open: WindowsOpen::default(),
             devices: vec![
                 Device::initialize(0, "PLC".to_owned()),
@@ -72,6 +74,7 @@ impl Default for TemplateApp {
             ],
             loggers: Vec::new(),
             device_beam: Vec::new(),
+            socket_channel: None,
             spawn_logging_thread: true,
             re: (
                 Regex::new(r"CH+(?:([0-9]+))").unwrap(),
@@ -140,6 +143,10 @@ impl eframe::App for TemplateApp {
             svg_logo,
             ..
         } = self;
+
+        // -------------------------------
+        // We check if we received a msg from the HMI and we update the channels.
+        // -------------------------------
 
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
