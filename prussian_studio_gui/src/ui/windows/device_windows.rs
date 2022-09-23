@@ -1,4 +1,4 @@
-use egui::{Button, Color32, Grid, Slider, Window};
+use egui::{Button, Color32, ComboBox, Grid, Slider, Window};
 use lib_device::*;
 
 use crate::{
@@ -172,5 +172,131 @@ pub fn plc_channels_window(
                         }
                     }
                 });
+        });
+}
+
+pub fn channel_config_window(
+    windows_open: &mut WindowsOpen,
+    ctx: &egui::Context,
+    channel_windows_buffer: &mut ChannelWindowsBuffer,
+    devices: &mut Vec<Device>,
+    device_beam: &mut Vec<DeviceBeam>,
+) {
+    Window::new("Channel Configuration")
+        .open(&mut windows_open.channel_config)
+        .show(ctx, |ui| {
+            ui.label(format!(
+                "{} configuration",
+                channel_windows_buffer.selected_channel
+            ));
+
+            ui.separator();
+            egui::Grid::new("Channel config")
+                .num_columns(2)
+                .show(ui, |ui| {
+                    channel_windows_buffer.edited_channel.id =
+                        channel_windows_buffer.selected_channel.id;
+                    ui.label("Tag");
+                    ui.text_edit_singleline(&mut channel_windows_buffer.edited_channel.tag);
+                    ui.end_row();
+                    ui.add(
+                        Slider::new(&mut channel_windows_buffer.edited_channel.index, 0..=49999)
+                            .text("Index"),
+                    );
+                    ui.end_row();
+                    ComboBox::from_label("Value type")
+                        .selected_text(format!(
+                            "{}",
+                            channel_windows_buffer.edited_channel.value_type
+                        ))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut channel_windows_buffer.edited_channel.value_type,
+                                ValueType::Int16,
+                                format!("{}", ValueType::Int16),
+                            );
+                            ui.selectable_value(
+                                &mut channel_windows_buffer.edited_channel.value_type,
+                                ValueType::Real32,
+                                format!("{}", ValueType::Real32),
+                            );
+                            ui.selectable_value(
+                                &mut channel_windows_buffer.edited_channel.value_type,
+                                ValueType::BoolType,
+                                format!("{}", ValueType::BoolType),
+                            );
+                        });
+                    ui.end_row();
+                    ComboBox::from_label("Access type")
+                        .selected_text(format!(
+                            "{}",
+                            channel_windows_buffer.edited_channel.access_type
+                        ))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut channel_windows_buffer.edited_channel.access_type,
+                                AccessType::Read,
+                                format!("{}", AccessType::Read),
+                            );
+                            ui.selectable_value(
+                                &mut channel_windows_buffer.edited_channel.access_type,
+                                AccessType::Write,
+                                format!("{}", AccessType::Write),
+                            );
+                        });
+                    ui.end_row();
+                    ui.label("Low alarm:");
+                    ui.label("High alarm:");
+                    ui.end_row();
+                    ui.checkbox(
+                        &mut channel_windows_buffer.edited_channel.alarm.low.enabled,
+                        "Enabled",
+                    );
+                    ui.checkbox(
+                        &mut channel_windows_buffer.edited_channel.alarm.high.enabled,
+                        "Enabled",
+                    );
+                    ui.end_row();
+                    ui.add_enabled_ui(
+                        channel_windows_buffer.edited_channel.alarm.low.enabled,
+                        |ui| {
+                            ui.add(
+                                Slider::new(
+                                    &mut channel_windows_buffer.edited_channel.alarm.low.setpoint,
+                                    0.0..=1000.0,
+                                )
+                                .text(""),
+                            );
+                        },
+                    );
+                    ui.add_enabled_ui(
+                        channel_windows_buffer.edited_channel.alarm.high.enabled,
+                        |ui| {
+                            ui.add(
+                                Slider::new(
+                                    &mut channel_windows_buffer.edited_channel.alarm.high.setpoint,
+                                    0.0..=1000.0,
+                                )
+                                .text(""),
+                            );
+                        },
+                    );
+
+                    ui.end_row();
+                });
+            ui.vertical_centered_justified(|ui| {
+                if ui.button("Save").clicked() {
+                    devices[channel_windows_buffer.device_id].channels
+                        [channel_windows_buffer.selected_channel.id] =
+                        channel_windows_buffer.edited_channel.clone();
+                    if let Some(device_beam) =
+                        device_beam.iter().nth(channel_windows_buffer.device_id)
+                    {
+                        if let Some(updated_channel) = device_beam.update.clone() {
+                            if updated_channel.send.send(devices.to_vec()).is_ok() {}
+                        }
+                    }
+                }
+            });
         });
 }
