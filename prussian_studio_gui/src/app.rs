@@ -2,6 +2,7 @@ use crate::{
     crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
     fonts::*,
     panels::{central_panel::*, left_panel::left_panel, right_panel::right_panel},
+    setup_app::{setup_app_defaults, setup_visuals},
     status::Status,
     ui::{menu_bars::*, panels::*, windows::device_windows::*},
     window::{DeviceType, *},
@@ -12,16 +13,13 @@ pub use lib_device::Channel;
 pub use lib_device::*;
 pub use lib_logger::{parse_pattern, Logger, LoggerType};
 
-use egui::{Button, Grid, Slider};
-use egui::{Color32, ComboBox, Rounding, Window};
+use egui::{Color32, ComboBox, Window};
+use egui::{Grid, Slider};
 use regex::Regex;
 use rfd::FileDialog;
 use std::net::TcpStream;
 use tungstenite::stream::MaybeTlsStream;
-use tungstenite::{connect, WebSocket};
-use url::Url;
-
-const NUM_CHANNELS: usize = 10;
+use tungstenite::WebSocket;
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -58,38 +56,7 @@ pub struct TemplateApp {
 
 impl Default for TemplateApp {
     fn default() -> Self {
-        let socket = match connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
-            Ok((socket, _)) => Some(socket),
-            Err(_) => None,
-        };
-        Self {
-            // Example stuff:
-            status: Status::default(),
-            logger_window_buffer: LoggerWindowBuffer::default(),
-            device_windows_buffer: DeviceWindowsBuffer::default(),
-            channel_windows_buffer: ChannelWindowsBuffer {
-                channel_write_value: vec![String::new(); NUM_CHANNELS],
-                device_id: 0,
-                ..Default::default()
-            },
-            windows_open: WindowsOpen::default(),
-            devices: vec![
-                Device::initialize(0, "PLC".to_owned()),
-                Device::initialize(1, "Modbus device".to_owned()),
-            ],
-            loggers: Vec::new(),
-            device_beam: Vec::new(),
-            device_msg_beam: Vec::new(),
-            socket_channel: None,
-            spawn_logging_thread: false,
-            re: (
-                Regex::new(r"CH+(?:([0-9]+))").unwrap(),
-                Regex::new(r"EVAL+(?:([0-9]+))").unwrap(),
-            ),
-            socket,
-            svg_logo: RetainedImage::from_svg_bytes("svg_logo.svg", include_bytes!("svg_logo.svg"))
-                .unwrap(),
-        }
+        setup_app_defaults()
     }
 }
 
@@ -100,22 +67,8 @@ impl TemplateApp {
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         setup_custom_fonts(&cc.egui_ctx);
 
-        let visuals = egui::Visuals {
-            dark_mode: false,
-            // override_text_color: Some(Color32::GRAY),
-            window_rounding: Rounding {
-                nw: 7.0,
-                ne: 7.0,
-                sw: 7.0,
-                se: 7.0,
-            },
-            hyperlink_color: Color32::from_rgb(0, 142, 240),
-            // faint_bg_color: Color32::from_gray(200),
-            // override_text_color: Some(Color32::from_gray(200)),
-            // ..Default::default()
-            ..egui::Visuals::light()
-        };
-        cc.egui_ctx.set_visuals(visuals);
+        setup_visuals(cc);
+
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
