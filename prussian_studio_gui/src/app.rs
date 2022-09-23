@@ -156,177 +156,19 @@ impl eframe::App for TemplateApp {
         // -------------------------------
 
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.label("powered by ");
-                ui.hyperlink_to("PrussianStudio", "https://github.com/crimsondamask");
-                ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                    ui.spacing_mut().item_spacing.x = 20.0;
-                    ui.label("v0.1");
-                    ui.horizontal(|ui| {
-                        let max_size = ui.available_size();
-                        svg_logo.show_max_size(
-                            ui,
-                            egui::Vec2 {
-                                x: max_size.x,
-                                y: 12.0,
-                            },
-                        );
-                        ui.spacing_mut().item_spacing.x = 20.0;
-                        ui.spinner();
-                        ui.label(format!("{}", &status.websocket));
-                    });
-                });
-            });
+            bottom_bar(ui, svg_logo, status);
         });
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Quit").clicked() {
-                        frame.quit();
-                    }
-                });
-                ui.menu_button("Edit", |ui| {
-                    if ui.button("Preferences").clicked() {
-                        windows_open.preferences = !windows_open.preferences;
-                    }
-                });
-                ui.menu_button("Devices", |ui| {
-                    // if ui.button("Add new device").clicked() {
-                    //     windows_open.new_device = !windows_open.new_device;
-                    // }
-                    ui.menu_button("PLC", |ui| {
-                        if ui.button("Configure").clicked() {
-                            device_windows_buffer.status = "".to_owned();
-                            windows_open.plc = !windows_open.plc;
-                            device_windows_buffer.name = devices[0].name.clone();
-                            device_windows_buffer.scan_rate = devices[0].scan_rate.clone();
-                            device_windows_buffer.config = devices[0].config.clone();
-                        }
-                        if ui.button("Channels").clicked() {
-                            windows_open.device_channels = !windows_open.device_channels;
-                            channel_windows_buffer.device_id = 0;
-                        }
-                    });
-                    ui.separator();
-                    ui.menu_button("Modbus Device", |ui| {
-                        if ui.button("Configure").clicked() {
-                            windows_open.modbus_device = !windows_open.modbus_device;
-                            device_windows_buffer.status = "".to_owned();
-                            device_windows_buffer.name = devices[1].name.clone();
-                            device_windows_buffer.scan_rate = devices[1].scan_rate.clone();
-                            device_windows_buffer.config = devices[1].config.clone();
-                        }
-                        if ui.button("Channels").clicked() {
-                            windows_open.device_channels = !windows_open.device_channels;
-                            channel_windows_buffer.device_id = 1;
-                        }
-                    });
-                });
-                ui.menu_button("Logger", |ui| {
-                    if ui.button("Configure").clicked() {
-                        windows_open.logger_configure = !windows_open.logger_configure;
-                    }
-                });
-                ui.menu_button("Help", |ui| if ui.button("About").clicked() {});
-
-                ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                    ui.spacing_mut().item_spacing.x = 20.0;
-                    ui.label("");
-                    ui.add_enabled_ui(!*spawn_logging_thread, |ui| {
-                        if ui.button("▶ Start").clicked() {
-                            *spawn_logging_thread = true;
-                        }
-                    });
-                });
-            });
-            Window::new("PLC Channels")
-                .open(&mut windows_open.device_channels)
-                .scroll2([true, true])
-                .show(ctx, |ui| {
-                    Grid::new("Channel List")
-                        .striped(true)
-                        .num_columns(9)
-                        .min_col_width(160.0)
-                        .show(ui, |ui| {
-                            if let Some(device) =
-                                &devices.iter().nth(channel_windows_buffer.device_id)
-                            {
-                                ui.label(format!("{}", &device));
-                                ui.label("Device status:");
-                                ui.label(format!("{}", &device.status));
-
-                                ui.end_row();
-                                ui.separator();
-                                ui.end_row();
-                                ui.label("Channel");
-                                ui.label("Value");
-                                ui.label("Alarm");
-                                ui.label("Tag");
-                                ui.label("Value type");
-                                ui.label("Access");
-                                ui.label("Address");
-                                ui.label("Device");
-                                ui.label("Status");
-                                ui.end_row();
-                                for _ in 0..9 {
-                                    ui.separator();
-                                }
-                                ui.end_row();
-                                for channel in device.channels.clone() {
-                                    let button =
-                                        Button::new(format!("CH{}", channel.id)).frame(true);
-                                    if ui.add(button).clicked() {
-                                        channel_windows_buffer.selected_channel = channel.clone();
-                                        windows_open.channel_config = !windows_open.channel_config;
-                                        channel_windows_buffer.edited_channel =
-                                            channel_windows_buffer.selected_channel.clone();
-                                    }
-                                    // ui.label(format!("CH{}", channel.id));
-                                    match channel.access_type {
-                                        AccessType::Write => {
-                                            ui.horizontal(|ui| {
-                                                ui.label(format!("{:.2}", channel.value));
-                                                if ui.button("Write").clicked() {
-                                                    channel_windows_buffer.selected_channel =
-                                                        channel.clone();
-
-                                                    windows_open.channel_write_value =
-                                                        !windows_open.channel_write_value;
-                                                }
-                                            });
-                                        }
-                                        AccessType::Read => {
-                                            ui.label(format!("{:.2}", channel.value));
-                                        }
-                                    };
-                                    let mut alarm = "";
-                                    if channel.alarm.low.active {
-                                        alarm = "LOW ALARM";
-                                    }
-
-                                    if channel.alarm.high.active {
-                                        alarm = "HIGH ALARM";
-                                    }
-                                    if channel.alarm.low.active && channel.alarm.high.active {
-                                        alarm = "LOW ALARM/HIGH ALARM";
-                                    }
-
-                                    ui.colored_label(Color32::RED, alarm);
-
-                                    ui.label(format!("{}", channel.tag));
-                                    ui.label(format!("{}", channel.value_type));
-                                    ui.label(format!("{}", channel.access_type));
-                                    ui.label(format!("{}", channel.index));
-                                    ui.label(format!("{}", channel.device_id));
-                                    ui.label(format!("{}", channel.status));
-                                    // if ui.small_button("Configure").clicked() {}
-                                    ui.end_row();
-                                }
-                            }
-                        });
-                });
+            top_bar(
+                ui,
+                frame,
+                windows_open,
+                device_windows_buffer,
+                devices,
+                channel_windows_buffer,
+                spawn_logging_thread,
+            );
+            plc_channels_window(windows_open, ctx, devices, channel_windows_buffer);
             Window::new("Write Value")
                 .open(&mut windows_open.channel_write_value)
                 .show(ctx, |ui| {
@@ -593,84 +435,14 @@ impl eframe::App for TemplateApp {
                         }
                     });
                 });
-            Window::new("PLC")
-                .open(&mut windows_open.plc)
-                .show(ctx, |ui| {
-                    ui.label("Configuration");
-                    ui.separator();
-                    egui::Grid::new("add_device").num_columns(2).show(ui, |ui| {
-                        ui.label("Device name:");
-                        ui.text_edit_singleline(&mut device_windows_buffer.name);
-                        ui.end_row();
-                        match device_windows_buffer.device_type {
-                            DeviceType::Tcp => {
-                                ui.label("IP address:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.address);
-                                ui.end_row();
-                                ui.label("Port:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.port);
-                                ui.end_row();
-                            }
-                            DeviceType::Serial => {
-                                ui.label("COM port:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.path);
-                                ui.end_row();
-                                ui.label("Baudrate:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.baudrate);
-                                ui.end_row();
-                                ui.label("Slave:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.slave);
-                                ui.end_row();
-                            }
-                        }
-                        ui.label("Scan rate:");
-                        ui.add(Slider::new(&mut device_windows_buffer.scan_rate, 0..=60).text(""));
-                        ui.end_row();
-                    });
-                    ui.vertical_centered_justified(|ui| {
-                        if ui.button("Save").clicked() {
-                            match device_windows_buffer.device_type {
-                                DeviceType::Tcp => {
-                                    if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
-                                        let config = DeviceConfig::Tcp(TcpConfig {
-                                            address: device_windows_buffer.address.to_owned(),
-                                            port,
-                                        });
-                                        devices[0].name = device_windows_buffer.name.clone();
-                                        devices[0].config = config.clone();
-                                        devices[0].scan_rate = device_windows_buffer.scan_rate;
-                                        device_windows_buffer.status =
-                                            "Device configuration saved successfully!".to_owned();
-                                        if let Some(device_msg) = device_msg_beam.iter().nth(0) {
-                                            if device_msg
-                                                .send
-                                                .send(DeviceMsg::Reconnect(config))
-                                                .is_ok()
-                                            {
-                                                println!("config sent!");
-                                            }
-                                        }
-                                        if let Some(device_beam) = device_beam.iter().nth(0) {
-                                            if let Some(updated_device) = device_beam.update.clone()
-                                            {
-                                                if updated_device
-                                                    .send
-                                                    .send(devices.to_vec())
-                                                    .is_ok()
-                                                {
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        device_windows_buffer.status = "Error!".to_owned();
-                                    }
-                                }
-                                DeviceType::Serial => {}
-                            }
-                        }
-                        ui.label(device_windows_buffer.status.to_owned());
-                    });
-                });
+            plc_config_window(
+                windows_open,
+                ctx,
+                device_windows_buffer,
+                devices,
+                device_msg_beam,
+                device_beam,
+            );
             Window::new("Modbus Device")
                 .open(&mut windows_open.modbus_device)
                 .scroll2([false, true])
@@ -750,11 +522,277 @@ impl eframe::App for TemplateApp {
                 });
             Window::new("Add Device")
                 .open(&mut windows_open.new_device)
-                .show(ctx, |ui| {});
+                .show(ctx, |_ui| {});
         });
 
         right_panel(ctx, &self);
         left_panel(ctx, self);
         central_panel(ctx, self);
     }
+}
+
+fn plc_config_window(
+    windows_open: &mut WindowsOpen,
+    ctx: &egui::Context,
+    device_windows_buffer: &mut DeviceWindowsBuffer,
+    devices: &mut Vec<Device>,
+    device_msg_beam: &mut Vec<DeviceMsgBeam>,
+    device_beam: &mut Vec<DeviceBeam>,
+) {
+    Window::new("PLC")
+        .open(&mut windows_open.plc)
+        .show(ctx, |ui| {
+            ui.label("Configuration");
+            ui.separator();
+            egui::Grid::new("add_device").num_columns(2).show(ui, |ui| {
+                ui.label("Device name:");
+                ui.text_edit_singleline(&mut device_windows_buffer.name);
+                ui.end_row();
+                match device_windows_buffer.device_type {
+                    DeviceType::Tcp => {
+                        ui.label("IP address:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.address);
+                        ui.end_row();
+                        ui.label("Port:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.port);
+                        ui.end_row();
+                    }
+                    DeviceType::Serial => {
+                        ui.label("COM port:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.path);
+                        ui.end_row();
+                        ui.label("Baudrate:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.baudrate);
+                        ui.end_row();
+                        ui.label("Slave:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.slave);
+                        ui.end_row();
+                    }
+                }
+                ui.label("Scan rate:");
+                ui.add(Slider::new(&mut device_windows_buffer.scan_rate, 0..=60).text(""));
+                ui.end_row();
+            });
+            ui.vertical_centered_justified(|ui| {
+                if ui.button("Save").clicked() {
+                    match device_windows_buffer.device_type {
+                        DeviceType::Tcp => {
+                            if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
+                                let config = DeviceConfig::Tcp(TcpConfig {
+                                    address: device_windows_buffer.address.to_owned(),
+                                    port,
+                                });
+                                devices[0].name = device_windows_buffer.name.clone();
+                                devices[0].config = config.clone();
+                                devices[0].scan_rate = device_windows_buffer.scan_rate;
+                                device_windows_buffer.status =
+                                    "Device configuration saved successfully!".to_owned();
+                                if let Some(device_msg) = device_msg_beam.iter().nth(0) {
+                                    if device_msg.send.send(DeviceMsg::Reconnect(config)).is_ok() {
+                                        println!("config sent!");
+                                    }
+                                }
+                                if let Some(device_beam) = device_beam.iter().nth(0) {
+                                    if let Some(updated_device) = device_beam.update.clone() {
+                                        if updated_device.send.send(devices.to_vec()).is_ok() {}
+                                    }
+                                }
+                            } else {
+                                device_windows_buffer.status = "Error!".to_owned();
+                            }
+                        }
+                        DeviceType::Serial => {}
+                    }
+                }
+                ui.label(device_windows_buffer.status.to_owned());
+            });
+        });
+}
+
+fn plc_channels_window(
+    windows_open: &mut WindowsOpen,
+    ctx: &egui::Context,
+    devices: &mut Vec<Device>,
+    channel_windows_buffer: &mut ChannelWindowsBuffer,
+) {
+    Window::new("PLC Channels")
+        .open(&mut windows_open.device_channels)
+        .scroll2([true, true])
+        .show(ctx, |ui| {
+            Grid::new("Channel List")
+                .striped(true)
+                .num_columns(9)
+                .min_col_width(160.0)
+                .show(ui, |ui| {
+                    if let Some(device) = &devices.iter().nth(channel_windows_buffer.device_id) {
+                        ui.label(format!("{}", &device));
+                        ui.label("Device status:");
+                        ui.label(format!("{}", &device.status));
+
+                        ui.end_row();
+                        ui.separator();
+                        ui.end_row();
+                        ui.label("Channel");
+                        ui.label("Value");
+                        ui.label("Alarm");
+                        ui.label("Tag");
+                        ui.label("Value type");
+                        ui.label("Access");
+                        ui.label("Address");
+                        ui.label("Device");
+                        ui.label("Status");
+                        ui.end_row();
+                        for _ in 0..9 {
+                            ui.separator();
+                        }
+                        ui.end_row();
+                        for channel in device.channels.clone() {
+                            let button = Button::new(format!("CH{}", channel.id)).frame(true);
+                            if ui.add(button).clicked() {
+                                channel_windows_buffer.selected_channel = channel.clone();
+                                windows_open.channel_config = !windows_open.channel_config;
+                                channel_windows_buffer.edited_channel =
+                                    channel_windows_buffer.selected_channel.clone();
+                            }
+                            // ui.label(format!("CH{}", channel.id));
+                            match channel.access_type {
+                                AccessType::Write => {
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("{:.2}", channel.value));
+                                        if ui.button("Write").clicked() {
+                                            channel_windows_buffer.selected_channel =
+                                                channel.clone();
+
+                                            windows_open.channel_write_value =
+                                                !windows_open.channel_write_value;
+                                        }
+                                    });
+                                }
+                                AccessType::Read => {
+                                    ui.label(format!("{:.2}", channel.value));
+                                }
+                            };
+                            let mut alarm = "";
+                            if channel.alarm.low.active {
+                                alarm = "LOW ALARM";
+                            }
+
+                            if channel.alarm.high.active {
+                                alarm = "HIGH ALARM";
+                            }
+                            if channel.alarm.low.active && channel.alarm.high.active {
+                                alarm = "LOW ALARM/HIGH ALARM";
+                            }
+
+                            ui.colored_label(Color32::RED, alarm);
+
+                            ui.label(format!("{}", channel.tag));
+                            ui.label(format!("{}", channel.value_type));
+                            ui.label(format!("{}", channel.access_type));
+                            ui.label(format!("{}", channel.index));
+                            ui.label(format!("{}", channel.device_id));
+                            ui.label(format!("{}", channel.status));
+                            // if ui.small_button("Configure").clicked() {}
+                            ui.end_row();
+                        }
+                    }
+                });
+        });
+}
+
+fn top_bar(
+    ui: &mut egui::Ui,
+    frame: &mut eframe::Frame,
+    windows_open: &mut WindowsOpen,
+    device_windows_buffer: &mut DeviceWindowsBuffer,
+    devices: &mut Vec<Device>,
+    channel_windows_buffer: &mut ChannelWindowsBuffer,
+    spawn_logging_thread: &mut bool,
+) {
+    // The top panel is often a good place for a menu bar:
+    egui::menu::bar(ui, |ui| {
+        ui.menu_button("File", |ui| {
+            if ui.button("Quit").clicked() {
+                frame.quit();
+            }
+        });
+        ui.menu_button("Edit", |ui| {
+            if ui.button("Preferences").clicked() {
+                windows_open.preferences = !windows_open.preferences;
+            }
+        });
+        ui.menu_button("Devices", |ui| {
+            // if ui.button("Add new device").clicked() {
+            //     windows_open.new_device = !windows_open.new_device;
+            // }
+            ui.menu_button("PLC", |ui| {
+                if ui.button("Configure").clicked() {
+                    device_windows_buffer.status = "".to_owned();
+                    windows_open.plc = !windows_open.plc;
+                    device_windows_buffer.name = devices[0].name.clone();
+                    device_windows_buffer.scan_rate = devices[0].scan_rate.clone();
+                    device_windows_buffer.config = devices[0].config.clone();
+                }
+                if ui.button("Channels").clicked() {
+                    windows_open.device_channels = !windows_open.device_channels;
+                    channel_windows_buffer.device_id = 0;
+                }
+            });
+            ui.separator();
+            ui.menu_button("Modbus Device", |ui| {
+                if ui.button("Configure").clicked() {
+                    windows_open.modbus_device = !windows_open.modbus_device;
+                    device_windows_buffer.status = "".to_owned();
+                    device_windows_buffer.name = devices[1].name.clone();
+                    device_windows_buffer.scan_rate = devices[1].scan_rate.clone();
+                    device_windows_buffer.config = devices[1].config.clone();
+                }
+                if ui.button("Channels").clicked() {
+                    windows_open.device_channels = !windows_open.device_channels;
+                    channel_windows_buffer.device_id = 1;
+                }
+            });
+        });
+        ui.menu_button("Logger", |ui| {
+            if ui.button("Configure").clicked() {
+                windows_open.logger_configure = !windows_open.logger_configure;
+            }
+        });
+        ui.menu_button("Help", |ui| if ui.button("About").clicked() {});
+
+        ui.with_layout(egui::Layout::right_to_left(), |ui| {
+            ui.spacing_mut().item_spacing.x = 20.0;
+            ui.label("");
+            ui.add_enabled_ui(!*spawn_logging_thread, |ui| {
+                if ui.button("▶ Start").clicked() {
+                    *spawn_logging_thread = true;
+                }
+            });
+        });
+    });
+}
+
+fn bottom_bar(ui: &mut egui::Ui, svg_logo: &mut RetainedImage, status: &mut Status) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.label("powered by ");
+        ui.hyperlink_to("PrussianStudio", "https://github.com/crimsondamask");
+        ui.with_layout(egui::Layout::right_to_left(), |ui| {
+            ui.spacing_mut().item_spacing.x = 20.0;
+            ui.label("v0.1");
+            ui.horizontal(|ui| {
+                let max_size = ui.available_size();
+                svg_logo.show_max_size(
+                    ui,
+                    egui::Vec2 {
+                        x: max_size.x,
+                        y: 12.0,
+                    },
+                );
+                ui.spacing_mut().item_spacing.x = 20.0;
+                ui.spinner();
+                ui.label(format!("{}", &status.websocket));
+            });
+        });
+    });
 }
