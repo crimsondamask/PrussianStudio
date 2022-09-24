@@ -1,9 +1,9 @@
 use crate::{
     crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
     fonts::*,
-    panels::{central_panel::*, left_panel::left_panel, right_panel::right_panel},
     setup_app::{setup_app_defaults, setup_visuals},
     status::Status,
+    ui::panels::{central_panel::*, left_panel::left_panel, right_panel::right_panel},
     ui::{
         menu_bars::*,
         windows::{device_windows::*, logger_windows::logger_config_window},

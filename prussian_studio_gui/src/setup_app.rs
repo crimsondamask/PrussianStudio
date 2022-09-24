@@ -47,7 +47,7 @@ pub fn setup_app_defaults() -> TemplateApp {
     }
 }
 
-pub fn setup_visuals(cc: &eframe::CreationContext) {
+pub fn setup_visuals(cc: &eframe::CreationContext<'_>) {
     let visuals = egui::Visuals {
         dark_mode: false,
         // override_text_color: Some(Color32::GRAY),

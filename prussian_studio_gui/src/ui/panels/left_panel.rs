@@ -2,7 +2,7 @@ use crate::app::TemplateApp;
 use egui::{Context, InnerResponse};
 use std::process::Command;
 
-pub fn left_panel(ctx: &Context, app: &mut TemplateApp) -> InnerResponse<()> {
+pub fn left_panel(ctx: &Context, _app: &mut TemplateApp) -> InnerResponse<()> {
     egui::SidePanel::left("side_panel").show(ctx, |ui| {
         ui.label("Options");
         ui.separator();

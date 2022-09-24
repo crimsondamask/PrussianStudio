@@ -3,12 +3,11 @@
 mod app;
 mod crossbeam;
 mod fonts;
-mod panels;
 mod setup_app;
 mod status;
 mod ui;
 mod window;
-mod windows;
+//mod windows;
 pub use app::TemplateApp;
 
 // ----------------------------------------------------------------------------

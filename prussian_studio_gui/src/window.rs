@@ -1,6 +1,6 @@
-use std::{default, path::PathBuf};
+use std::path::PathBuf;
 
-use lib_device::{AccessType, Channel, Device, DeviceConfig, ValueType};
+use lib_device::{Channel, Device, DeviceConfig};
 use lib_logger::{ChannelPattern, LoggerType};
 use serde::{Deserialize, Serialize};
 

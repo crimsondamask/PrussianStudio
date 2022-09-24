@@ -1,6 +1,6 @@
 use lib_device::*;
 
-use crate::panels::central_panel::JsonWriteChannel;
+use crate::ui::panels::central_panel::JsonWriteChannel;
 
 #[derive(Clone)]
 pub struct CrossBeamChannel {
