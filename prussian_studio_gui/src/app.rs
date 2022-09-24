@@ -4,8 +4,11 @@ use crate::{
     panels::{central_panel::*, left_panel::left_panel, right_panel::right_panel},
     setup_app::{setup_app_defaults, setup_visuals},
     status::Status,
-    ui::{menu_bars::*, panels::*, windows::device_windows::*},
-    window::{DeviceType, *},
+    ui::{
+        menu_bars::*,
+        windows::{device_windows::*, logger_windows::logger_config_window},
+    },
+    window::*,
 };
 
 use extras::RetainedImage;
@@ -13,10 +16,8 @@ pub use lib_device::Channel;
 pub use lib_device::*;
 pub use lib_logger::{parse_pattern, Logger, LoggerType};
 
-use egui::{Color32, ComboBox, Window};
-use egui::{Grid, Slider};
+use egui::Window;
 use regex::Regex;
-use rfd::FileDialog;
 use std::net::TcpStream;
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::WebSocket;
@@ -158,109 +159,9 @@ impl eframe::App for TemplateApp {
                 .show(ctx, |ui| {
                     ctx.settings_ui(ui);
                 });
-            Window::new("Configure Logger")
-                .open(&mut windows_open.logger_configure)
-                .scroll2([true, true])
-                .show(ctx, |ui| {
-                    Grid::new("Logger List")
-                        .striped(true)
-                        .num_columns(2)
-                        .show(ui, |ui| {
-                            ui.label("Logger name:");
-                            ui.add(egui::TextEdit::singleline(
-                                &mut logger_window_buffer.logger_name,
-                            ));
-                            ui.end_row();
-                            ui.label("Type");
-                            ComboBox::from_label("")
-                                .selected_text(format!("{}", logger_window_buffer.logger_type))
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(
-                                        &mut logger_window_buffer.logger_type,
-                                        LoggerType::DataBase,
-                                        "Database",
-                                    );
-                                    ui.selectable_value(
-                                        &mut logger_window_buffer.logger_type,
-                                        LoggerType::TextFile,
-                                        "Text File",
-                                    );
-                                });
-                            ui.end_row();
-                            ui.label("Log rate:");
-                            ui.add(
-                                Slider::new(&mut logger_window_buffer.log_rate, 1..=900)
-                                    .text("Seconds"),
-                            );
-                            ui.end_row();
-                            ui.label("Channel pattern:");
-                            ui.add(
-                                egui::TextEdit::singleline(
-                                    &mut logger_window_buffer.channel_pattern.pattern,
-                                )
-                                .hint_text("Ex: CH1-CH7, EVAL10-EVAL20"),
-                            );
-                            ui.end_row();
-                            match parse_pattern(
-                                &logger_window_buffer.channel_pattern,
-                                (&re.0, &re.1),
-                            ) {
-                                Ok(channels) => {
-                                    ui.colored_label(
-                                        Color32::DARK_GREEN,
-                                        format!("{} channels will be logged.", &channels.len()),
-                                    );
-                                }
-                                Err(e) => {
-                                    ui.colored_label(Color32::RED, format!("{}", e));
-                                }
-                            }
-                            ui.end_row();
-                            if ui.button("Path").clicked() {
-                                if let Some(path) = FileDialog::new().set_directory(".").save_file()
-                                {
-                                    logger_window_buffer.path = path;
-                                }
-                            }
-                            ui.label(format!("{}", &logger_window_buffer.path.to_str().unwrap()));
-                            ui.end_row();
-                            ui.label("Logger list");
-                            ui.end_row();
-                            for logger in loggers.iter() {
-                                ui.label("Name:");
-                                ui.label(format!("{}", &logger.name));
-                                ui.end_row();
-                                ui.label("Number of channels:");
-                                ui.label(format!("{}", &logger.channels.len()));
-                                ui.end_row();
-                                ui.label("Type:");
-                                ui.label(format!("{}", &logger.logger_type));
-                                ui.end_row();
-                                ui.label("Logging rate:");
-                                ui.label(format!("{} seconds", &logger.log_rate));
-                                ui.end_row();
-                                ui.separator();
-                                ui.end_row();
-                            }
-                            ui.vertical_centered_justified(|ui| {
-                                if ui.button("Save").clicked() {
-                                    let logger = Logger::new(
-                                        logger_window_buffer.logger_name.clone(),
-                                        logger_window_buffer.logger_type.clone(),
-                                        &mut logger_window_buffer.channel_pattern,
-                                        logger_window_buffer.path.clone(),
-                                        logger_window_buffer.log_rate,
-                                        false,
-                                        (&re.0, &re.1),
-                                    );
 
-                                    if let Ok(logger) = logger {
-                                        loggers.push(logger);
-                                    }
-                                }
-                            });
-                        });
-                });
+            logger_config_window(windows_open, ctx, logger_window_buffer, re, loggers);
+
             channel_config_window(
                 windows_open,
                 ctx,
@@ -268,6 +169,7 @@ impl eframe::App for TemplateApp {
                 devices,
                 device_beam,
             );
+
             plc_config_window(
                 windows_open,
                 ctx,
@@ -276,83 +178,15 @@ impl eframe::App for TemplateApp {
                 device_msg_beam,
                 device_beam,
             );
-            Window::new("Modbus Device")
-                .open(&mut windows_open.modbus_device)
-                .scroll2([false, true])
-                .show(ctx, |ui| {
-                    ui.label("Configuration");
-                    ui.separator();
-                    egui::Grid::new("add_device").num_columns(2).show(ui, |ui| {
-                        ui.label("Device name:");
-                        ui.text_edit_singleline(&mut device_windows_buffer.name);
-                        ui.end_row();
-                        match device_windows_buffer.device_type {
-                            DeviceType::Tcp => {
-                                ui.label("IP address:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.address);
-                                ui.end_row();
-                                ui.label("Port:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.port);
-                                ui.end_row();
-                            }
-                            DeviceType::Serial => {
-                                ui.label("COM port:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.path);
-                                ui.end_row();
-                                ui.label("Baudrate:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.baudrate);
-                                ui.end_row();
-                                ui.label("Slave:");
-                                ui.text_edit_singleline(&mut device_windows_buffer.slave);
-                                ui.end_row();
-                            }
-                        }
-                        ui.label("Scan rate:");
-                        ui.add(Slider::new(&mut device_windows_buffer.scan_rate, 0..=60).text(""));
-                        ui.end_row();
-                    });
-                    ui.vertical_centered_justified(|ui| {
-                        if ui.button("Save").clicked() {
-                            match device_windows_buffer.device_type {
-                                DeviceType::Tcp => {
-                                    if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
-                                        let config = DeviceConfig::Tcp(TcpConfig {
-                                            address: device_windows_buffer.address.to_owned(),
-                                            port,
-                                        });
-                                        devices[1].name = device_windows_buffer.name.clone();
-                                        devices[1].config = config.clone();
-                                        device_windows_buffer.status =
-                                            "Device configuration saved successfully!".to_owned();
-                                        if let Some(device_msg) = device_msg_beam.iter().nth(1) {
-                                            if device_msg
-                                                .send
-                                                .send(DeviceMsg::Reconnect(config))
-                                                .is_ok()
-                                            {
-                                            }
-                                        }
-                                        if let Some(device_beam) = device_beam.iter().nth(1) {
-                                            if let Some(updated_device) = device_beam.update.clone()
-                                            {
-                                                if updated_device
-                                                    .send
-                                                    .send(devices.to_vec())
-                                                    .is_ok()
-                                                {
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        device_windows_buffer.status = "Error!".to_owned();
-                                    }
-                                }
-                                DeviceType::Serial => {}
-                            }
-                        }
-                        ui.label(device_windows_buffer.status.to_owned());
-                    });
-                });
+
+            device_config_window(
+                windows_open,
+                ctx,
+                device_windows_buffer,
+                devices,
+                device_msg_beam,
+                device_beam,
+            );
         });
 
         right_panel(ctx, &self);

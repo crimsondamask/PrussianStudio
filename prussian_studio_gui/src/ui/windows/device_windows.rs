@@ -300,3 +300,79 @@ pub fn channel_config_window(
             });
         });
 }
+
+pub fn device_config_window(
+    windows_open: &mut WindowsOpen,
+    ctx: &egui::Context,
+    device_windows_buffer: &mut DeviceWindowsBuffer,
+    devices: &mut Vec<Device>,
+    device_msg_beam: &mut Vec<DeviceMsgBeam>,
+    device_beam: &mut Vec<DeviceBeam>,
+) {
+    Window::new("Modbus Device")
+        .open(&mut windows_open.modbus_device)
+        .scroll2([false, true])
+        .show(ctx, |ui| {
+            ui.label("Configuration");
+            ui.separator();
+            egui::Grid::new("add_device").num_columns(2).show(ui, |ui| {
+                ui.label("Device name:");
+                ui.text_edit_singleline(&mut device_windows_buffer.name);
+                ui.end_row();
+                match device_windows_buffer.device_type {
+                    DeviceType::Tcp => {
+                        ui.label("IP address:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.address);
+                        ui.end_row();
+                        ui.label("Port:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.port);
+                        ui.end_row();
+                    }
+                    DeviceType::Serial => {
+                        ui.label("COM port:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.path);
+                        ui.end_row();
+                        ui.label("Baudrate:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.baudrate);
+                        ui.end_row();
+                        ui.label("Slave:");
+                        ui.text_edit_singleline(&mut device_windows_buffer.slave);
+                        ui.end_row();
+                    }
+                }
+                ui.label("Scan rate:");
+                ui.add(Slider::new(&mut device_windows_buffer.scan_rate, 0..=60).text(""));
+                ui.end_row();
+            });
+            ui.vertical_centered_justified(|ui| {
+                if ui.button("Save").clicked() {
+                    match device_windows_buffer.device_type {
+                        DeviceType::Tcp => {
+                            if let Ok(port) = device_windows_buffer.port.parse::<usize>() {
+                                let config = DeviceConfig::Tcp(TcpConfig {
+                                    address: device_windows_buffer.address.to_owned(),
+                                    port,
+                                });
+                                devices[1].name = device_windows_buffer.name.clone();
+                                devices[1].config = config.clone();
+                                device_windows_buffer.status =
+                                    "Device configuration saved successfully!".to_owned();
+                                if let Some(device_msg) = device_msg_beam.iter().nth(1) {
+                                    if device_msg.send.send(DeviceMsg::Reconnect(config)).is_ok() {}
+                                }
+                                if let Some(device_beam) = device_beam.iter().nth(1) {
+                                    if let Some(updated_device) = device_beam.update.clone() {
+                                        if updated_device.send.send(devices.to_vec()).is_ok() {}
+                                    }
+                                }
+                            } else {
+                                device_windows_buffer.status = "Error!".to_owned();
+                            }
+                        }
+                        DeviceType::Serial => {}
+                    }
+                }
+                ui.label(device_windows_buffer.status.to_owned());
+            });
+        });
+}
