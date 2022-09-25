@@ -1,5 +1,6 @@
 use crate::{
-    crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
+    app_threads::{spawn_device_thread, spawn_socket_recv},
+    crossbeam::{CrossBeamChannel, CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
     fonts::*,
     setup_app::{setup_app_defaults, setup_visuals},
     status::Status,
@@ -11,6 +12,7 @@ use crate::{
     window::*,
 };
 
+use crossbeam_channel::unbounded;
 use extras::RetainedImage;
 pub use lib_device::Channel;
 pub use lib_device::*;
@@ -18,9 +20,22 @@ pub use lib_logger::{parse_pattern, Logger, LoggerType};
 
 use egui::Window;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::net::TcpStream;
-use tungstenite::stream::MaybeTlsStream;
-use tungstenite::WebSocket;
+use tungstenite::{connect, stream::MaybeTlsStream};
+use tungstenite::{Message, WebSocket};
+use url::Url;
+
+#[derive(Serialize, Clone)]
+pub struct DataSerialized {
+    pub devices: Vec<Device>,
+}
+#[derive(Deserialize, Clone, PartialEq)]
+pub struct JsonWriteChannel {
+    pub device_id: usize,
+    pub channel: usize,
+    pub value: f32,
+}
 
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
@@ -101,14 +116,148 @@ impl eframe::App for TemplateApp {
             device_beam,
             device_msg_beam,
             spawn_logging_thread,
+            socket_channel,
+            socket,
             re,
             svg_logo,
             ..
         } = self;
 
-        // -------------------------------
-        // We check if we received a msg from the HMI and we update the channels.
-        // -------------------------------
+        let num_devices = devices.len();
+
+        // We keep trying on reconnecting to the websocket server if
+        // there is no cnx established.
+
+        if !socket.is_some() {
+            if let Ok((socket_conn, _)) =
+                connect(Url::parse("wss://localhost:8080/socket").unwrap())
+            {
+                *socket = Some(socket_conn);
+            }
+        }
+
+        // We try to receive any pending messages from all the threads.
+        // Each thread has its own crossbeam channel.
+        // --------------------------------
+        for i in 0..(num_devices) {
+            if let Some(crossbeam) = device_beam.iter().nth(i) {
+                if let Some(devices_received) = crossbeam.read.clone() {
+                    if let Ok(device_received) = devices_received.receive.try_recv() {
+                        devices[i] = device_received[i].clone();
+                    }
+                }
+            }
+        }
+        // --------------------------------
+
+        let data_to_serialize = DataSerialized {
+            devices: devices.clone(),
+        };
+        // We send the data over the web socket to the HMI and update our status.
+        status.websocket = match send_over_socket(socket, &data_to_serialize) {
+            Ok(_) => "Connected to WebSocket.".to_owned(),
+            Err(e) => {
+                *socket = None;
+                format!("ERROR: {}", e)
+            }
+        };
+
+        // --------------------------------
+        // We check if there is any write request from the HMI
+        // This is achieved by checking the channel that the write websocket
+        // communicates with.
+
+        if let Some(socket_channel) = socket_channel {
+            if let Ok(json_channel) = socket_channel.receive.try_recv() {
+                match devices[json_channel.device_id].channels[json_channel.channel].access_type {
+                    AccessType::Write => {
+                        devices[json_channel.device_id].channels[json_channel.channel].value =
+                            json_channel.value;
+                        println!("channel modified");
+                        if let Some(device_beam) = device_beam.iter().nth(json_channel.device_id) {
+                            if let Some(updated_channel) = device_beam.update.clone() {
+                                if let Ok(_) = updated_channel.send.send(devices.to_vec()) {
+                                    println!("Sent the write update to the device worker.");
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // --------------------------------
+
+        // We check if the start button has been pressed
+        // Will change later.
+        // --------------------------------
+        if *spawn_logging_thread {
+            *spawn_logging_thread = !*spawn_logging_thread;
+            let devices_to_read = devices.clone();
+
+            let (socket_s, socket_r): (
+                crossbeam_channel::Sender<JsonWriteChannel>,
+                crossbeam_channel::Receiver<JsonWriteChannel>,
+            ) = unbounded();
+            // We construct the channel for writing values from HMI.
+            let socket_channel_init = CrossBeamSocketChannel {
+                send: socket_s,
+                receive: socket_r,
+            };
+
+            *socket_channel = Some(socket_channel_init.clone());
+
+            spawn_socket_recv(socket_channel_init);
+
+            for i in 0..(num_devices) {
+                let (device_msg_s, device_msg_r): (
+                    crossbeam_channel::Sender<DeviceMsg>,
+                    crossbeam_channel::Receiver<DeviceMsg>,
+                ) = unbounded();
+                let (read_s, read_r): (
+                    crossbeam_channel::Sender<Vec<Device>>,
+                    crossbeam_channel::Receiver<Vec<Device>>,
+                ) = unbounded();
+                let (update_s, update_r): (
+                    crossbeam_channel::Sender<Vec<Device>>,
+                    crossbeam_channel::Receiver<Vec<Device>>,
+                ) = unbounded();
+
+                let device_msg_channel = DeviceMsgBeam {
+                    send: device_msg_s,
+                    receive: device_msg_r,
+                };
+                let read_channel = CrossBeamChannel {
+                    send: read_s.clone(),
+                    receive: read_r.clone(),
+                };
+                let update_channel = CrossBeamChannel {
+                    send: update_s,
+                    receive: update_r.clone(),
+                };
+
+                let device_channel = DeviceBeam {
+                    read: Some(read_channel),
+                    update: Some(update_channel),
+                };
+
+                device_msg_beam.push(device_msg_channel.clone());
+
+                device_beam.push(device_channel.clone());
+
+                spawn_device_thread(
+                    devices_to_read.clone(),
+                    device_channel.clone(),
+                    device_msg_channel.clone(),
+                    i,
+                );
+            }
+        }
+        // --------------------------------
+
+        // --------------------------------
+        // Drawing the UI
 
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
             bottom_bar(ui, svg_logo, status);
@@ -123,42 +272,18 @@ impl eframe::App for TemplateApp {
                 channel_windows_buffer,
                 spawn_logging_thread,
             );
+
             plc_channels_window(windows_open, ctx, devices, channel_windows_buffer);
-            Window::new("Write Value")
-                .open(&mut windows_open.channel_write_value)
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.text_edit_singleline(
-                            &mut channel_windows_buffer.channel_write_value
-                                [channel_windows_buffer.selected_channel.id],
-                        );
-                        if ui.button("Write").clicked() {
-                            if let Ok(value) = channel_windows_buffer.channel_write_value
-                                [channel_windows_buffer.selected_channel.id]
-                                .parse::<f32>()
-                            {
-                                devices[channel_windows_buffer.device_id].channels
-                                    [channel_windows_buffer.selected_channel.id]
-                                    .value = value;
 
-                                if let Some(device_beam) =
-                                    device_beam.iter().nth(channel_windows_buffer.device_id)
-                                {
-                                    if let Some(updated_channel) = device_beam.update.clone() {
-                                        if let Ok(_) = updated_channel.send.send(devices.to_vec()) {
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-                });
+            write_channel_value_ui(
+                windows_open,
+                ctx,
+                channel_windows_buffer,
+                devices,
+                device_beam,
+            );
 
-            Window::new("Preferences")
-                .open(&mut windows_open.preferences)
-                .show(ctx, |ui| {
-                    ctx.settings_ui(ui);
-                });
+            preferences_ui(windows_open, ctx);
 
             logger_config_window(windows_open, ctx, logger_window_buffer, re, loggers);
 
@@ -192,5 +317,63 @@ impl eframe::App for TemplateApp {
         right_panel(ctx, &self);
         left_panel(ctx, self);
         central_panel(ctx, self);
+    }
+}
+
+fn write_channel_value_ui(
+    windows_open: &mut WindowsOpen,
+    ctx: &egui::Context,
+    channel_windows_buffer: &mut ChannelWindowsBuffer,
+    devices: &mut Vec<Device>,
+    device_beam: &mut Vec<DeviceBeam>,
+) {
+    Window::new("Write Value")
+        .open(&mut windows_open.channel_write_value)
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(
+                    &mut channel_windows_buffer.channel_write_value
+                        [channel_windows_buffer.selected_channel.id],
+                );
+                if ui.button("Write").clicked() {
+                    if let Ok(value) = channel_windows_buffer.channel_write_value
+                        [channel_windows_buffer.selected_channel.id]
+                        .parse::<f32>()
+                    {
+                        devices[channel_windows_buffer.device_id].channels
+                            [channel_windows_buffer.selected_channel.id]
+                            .value = value;
+
+                        if let Some(device_beam) =
+                            device_beam.iter().nth(channel_windows_buffer.device_id)
+                        {
+                            if let Some(updated_channel) = device_beam.update.clone() {
+                                if let Ok(_) = updated_channel.send.send(devices.to_vec()) {}
+                            }
+                        }
+                    }
+                }
+            });
+        });
+}
+
+fn preferences_ui(windows_open: &mut WindowsOpen, ctx: &egui::Context) {
+    Window::new("Preferences")
+        .open(&mut windows_open.preferences)
+        .show(ctx, |ui| {
+            ctx.settings_ui(ui);
+        });
+}
+
+fn send_over_socket(
+    socket: &mut Option<WebSocket<MaybeTlsStream<TcpStream>>>,
+    data: &DataSerialized,
+) -> anyhow::Result<()> {
+    let json = serde_json::to_string(data)?;
+    if let Some(socket) = socket {
+        socket.write_message(Message::Text(json))?;
+        Ok(())
+    } else {
+        anyhow::bail!("There is no socket connected!")
     }
 }
