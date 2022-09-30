@@ -4,9 +4,9 @@ use crate::{
     fonts::*,
     setup_app::{setup_app_defaults, setup_visuals},
     status::Status,
-    ui::panels::{central_panel::*, left_panel::left_panel, right_panel::right_panel},
     ui::{
         menu_bars::*,
+        panels::{central_panel::*, left_panel::left_panel, right_panel::right_panel},
         windows::{device_windows::*, logger_windows::logger_config_window},
     },
     window::*,
@@ -103,7 +103,6 @@ impl eframe::App for TemplateApp {
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
-    /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self {
             status,
@@ -125,7 +124,7 @@ impl eframe::App for TemplateApp {
 
         let num_devices = devices.len();
 
-        // We keep trying on reconnecting to the websocket server if
+        // We keep trying to reconnect to the websocket server if
         // there is no cnx established.
 
         if !socket.is_some() {

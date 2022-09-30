@@ -1,10 +1,8 @@
-use std::{thread, time::Duration};
-
+use crate::crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam};
 use lib_device::{AccessType, Device, DeviceMsg};
+use std::{thread, time::Duration};
 use tungstenite::connect;
 use url::Url;
-
-use crate::crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam};
 
 pub fn spawn_device_thread(
     mut devices_to_read: Vec<Device>,
@@ -107,10 +105,17 @@ pub fn spawn_socket_recv(socket_channel: CrossBeamSocketChannel) {
     thread::spawn(move || {
         if let Ok((mut socket, _)) = connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
             loop {
-                let msg = socket.read_message().expect("Error reading message");
-                if let Ok(json_write_channel) = serde_json::from_str(msg.to_text().unwrap()) {
-                    if socket_channel.send.send(json_write_channel).is_ok() {
-                        println!("Channel serialized!");
+                if let Ok(msg) = socket.read_message() {
+                    if let Ok(json_write_channel) = serde_json::from_str(msg.to_text().unwrap()) {
+                        if socket_channel.send.send(json_write_channel).is_ok() {
+                            println!("Channel serialized!");
+                        }
+                    }
+                } else {
+                    if let Ok((socket_reconn, _)) =
+                        connect(Url::parse("wss://localhost:8080/socket").unwrap())
+                    {
+                        socket = socket_reconn;
                     }
                 }
             }
