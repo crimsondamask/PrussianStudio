@@ -196,6 +196,11 @@ pub fn channel_config_window(
                 .show(ui, |ui| {
                     channel_windows_buffer.edited_channel.id =
                         channel_windows_buffer.selected_channel.id;
+                    ui.checkbox(
+                        &mut channel_windows_buffer.edited_channel.enabled,
+                        "Enabled",
+                    );
+                    ui.end_row();
                     ui.label("Tag");
                     ui.text_edit_singleline(&mut channel_windows_buffer.edited_channel.tag);
                     ui.end_row();

@@ -1,5 +1,5 @@
 use crate::crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam};
-use lib_device::{AccessType, Device, DeviceMsg};
+use lib_device::{get_register_list, AccessType, Device, DeviceMsg};
 use std::{thread, time::Duration};
 use tungstenite::connect;
 use url::Url;
@@ -72,6 +72,8 @@ pub fn start_device_poll_loop(
             }
         }
 
+        let (_, reg_list) = get_register_list(&devices_to_read[i]);
+        println!("{:?}", reg_list);
         // We poll data from the device and send it to the main GUI thread.
         let channels = devices_to_read[i].channels.clone();
         let mut channels_to_send = Vec::with_capacity(channels.len());
