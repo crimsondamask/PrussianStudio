@@ -130,23 +130,27 @@ pub fn plc_channels_window(
                                     channel_windows_buffer.selected_channel.clone();
                             }
                             // ui.label(format!("CH{}", channel.id));
-                            match channel.access_type {
-                                AccessType::Write => {
-                                    ui.horizontal(|ui| {
-                                        ui.label(format!("{:.2}", channel.value));
-                                        if ui.button("Write").clicked() {
-                                            channel_windows_buffer.selected_channel =
-                                                channel.clone();
+                            if channel.enabled {
+                                match channel.access_type {
+                                    AccessType::Write => {
+                                        ui.horizontal(|ui| {
+                                            ui.label(format!("{:.2}", channel.value));
+                                            if ui.button("Write").clicked() {
+                                                channel_windows_buffer.selected_channel =
+                                                    channel.clone();
 
-                                            windows_open.channel_write_value =
-                                                !windows_open.channel_write_value;
-                                        }
-                                    });
-                                }
-                                AccessType::Read => {
-                                    ui.label(format!("{:.2}", channel.value));
-                                }
-                            };
+                                                windows_open.channel_write_value =
+                                                    !windows_open.channel_write_value;
+                                            }
+                                        });
+                                    }
+                                    AccessType::Read => {
+                                        ui.label(format!("{:.2}", channel.value));
+                                    }
+                                };
+                            } else {
+                                ui.label("Disabled.");
+                            }
                             let mut alarm = "";
                             if channel.alarm.low.active {
                                 alarm = "LOW ALARM";

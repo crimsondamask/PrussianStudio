@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tokio_modbus::{client::sync::Context, prelude::*};
 use tokio_serial;
 
-const NUM_CHANNELS: usize = 10;
+const DEVICE_NUM_CHANNELS: usize = 20;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct DataBlock {
@@ -84,7 +84,7 @@ impl Device {
         let data_block = DataBlock {
             holding_regs: Vec::new(),
         };
-        for i in 0..NUM_CHANNELS {
+        for i in 0..DEVICE_NUM_CHANNELS {
             let channel = Channel {
                 id: i,
                 device_id: id,
@@ -136,7 +136,7 @@ impl Default for Device {
         let data_block = DataBlock {
             holding_regs: Vec::new(),
         };
-        for i in 0..NUM_CHANNELS {
+        for i in 0..DEVICE_NUM_CHANNELS {
             let channel = Channel {
                 id: i,
                 ..Default::default()

@@ -20,7 +20,7 @@ pub use lib_logger::{parse_pattern, Logger, LoggerType};
 
 use egui::Window;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::net::TcpStream;
 use tungstenite::{connect, stream::MaybeTlsStream};
 use tungstenite::{Message, WebSocket};

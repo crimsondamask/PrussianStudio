@@ -10,7 +10,7 @@ use crate::{
     window::{ChannelWindowsBuffer, DeviceWindowsBuffer, LoggerWindowBuffer, WindowsOpen},
     TemplateApp,
 };
-const NUM_CHANNELS: usize = 10;
+const NUM_CHANNELS: usize = 20;
 
 pub fn setup_app_defaults() -> TemplateApp {
     let socket = match connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
