@@ -61,6 +61,8 @@ pub struct TemplateApp {
     pub socket: Option<WebSocket<MaybeTlsStream<TcpStream>>>,
     #[serde(skip)]
     pub svg_logo: RetainedImage,
+    #[serde(skip)]
+    pub allow_exit: bool,
 }
 
 impl Default for TemplateApp {
@@ -91,6 +93,10 @@ impl TemplateApp {
 impl eframe::App for TemplateApp {
     /// Called by the frame work to save state before shutdown.
 
+    fn on_exit_event(&mut self) -> bool {
+        self.windows_open.confirm_exit = true;
+        self.allow_exit
+    }
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
@@ -193,10 +199,10 @@ impl eframe::App for TemplateApp {
                 crossbeam_channel::Receiver<JsonWriteChannel>,
             ) = unbounded();
             // We construct the channel for writing values from HMI.
-            let socket_channel_init = CrossBeamSocketChannel {
-                send: socket_s,
-                receive: socket_r,
-            };
+            //let socket_channel_init = CrossBeamSocketChannel {
+            //  send: socket_s,
+            //receive: socket_r,
+            // };
 
             //*socket_channel = Some(socket_channel_init.clone());
 
@@ -252,6 +258,24 @@ impl eframe::App for TemplateApp {
         // --------------------------------
         // Drawing the UI
 
+        if windows_open.confirm_exit {
+            egui::Window::new("Confirm exit")
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    ui.label("Are you sure you want to quit the application?");
+                    ui.horizontal(|ui| {
+                        if ui.button("Cancel").clicked() {
+                            windows_open.confirm_exit = false;
+                        }
+
+                        if ui.button("Yes").clicked() {
+                            self.allow_exit = true;
+                            frame.quit();
+                        }
+                    });
+                });
+        }
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
             bottom_bar(ui, svg_logo, status);
         });

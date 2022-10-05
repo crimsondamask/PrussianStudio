@@ -44,6 +44,7 @@ pub fn setup_app_defaults() -> TemplateApp {
         socket,
         svg_logo: RetainedImage::from_svg_bytes("svg_logo.svg", include_bytes!("svg_logo.svg"))
             .unwrap(),
+        allow_exit: false,
     }
 }
 
