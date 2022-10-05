@@ -16,9 +16,22 @@ use tokio_serial;
 
 const NUM_CHANNELS: usize = 10;
 
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+pub struct DataBlock {
+    pub holding_regs: Vec<i16>,
+}
+
+#[derive(Deserialize, Clone, PartialEq)]
+pub struct JsonWriteChannel {
+    pub device_id: usize,
+    pub channel: usize,
+    pub value: f32,
+}
+
 #[derive(Clone)]
 pub enum DeviceMsg {
     Reconnect(DeviceConfig),
+    WriteChannel(JsonWriteChannel),
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -28,12 +41,6 @@ pub enum DeviceType {
     WebSocketServer,
 }
 
-// #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-// pub struct DeviceConfig {
-//     pub address: String,
-//     pub port: usize,
-// }
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Device {
     pub id: usize,
@@ -41,6 +48,7 @@ pub struct Device {
     pub device_type: DeviceType,
     pub config: DeviceConfig,
     pub channels: Vec<Channel>,
+    pub data_block: DataBlock,
     pub scan_rate: u64,
     pub status: String,
 }
@@ -52,6 +60,7 @@ impl Device {
         device_type: DeviceType,
         config: DeviceConfig,
         channels: Vec<Channel>,
+        data_block: DataBlock,
         scan_rate: u64,
         status: String,
     ) -> Self {
@@ -61,6 +70,7 @@ impl Device {
             device_type,
             config,
             channels,
+            data_block,
             scan_rate,
             status,
         }
@@ -71,6 +81,9 @@ impl Device {
             address: "127.0.0.1".to_owned(),
             port: 502,
         });
+        let data_block = DataBlock {
+            holding_regs: Vec::new(),
+        };
         for i in 0..NUM_CHANNELS {
             let channel = Channel {
                 id: i,
@@ -85,6 +98,7 @@ impl Device {
             device_type: DeviceType::Modbus,
             config,
             channels,
+            data_block,
             status: "Initialized".to_owned(),
             scan_rate: 1,
         }
@@ -118,6 +132,10 @@ impl Default for Device {
             address: "127.0.0.1".to_owned(),
             port: 502,
         });
+
+        let data_block = DataBlock {
+            holding_regs: Vec::new(),
+        };
         for i in 0..NUM_CHANNELS {
             let channel = Channel {
                 id: i,
@@ -131,6 +149,7 @@ impl Default for Device {
             device_type: DeviceType::Modbus,
             config,
             channels,
+            data_block,
             status: "Initialized".to_owned(),
             scan_rate: 1,
         }
@@ -141,4 +160,64 @@ impl Display for Device {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)
     }
+}
+
+pub fn get_register_list(device: &Device) -> Vec<u16> {
+    let mut register_list: Vec<u16> = Vec::new();
+
+    let _: Vec<_> = device
+        .channels
+        .iter()
+        .filter(|channel| channel.enabled)
+        .map(|channel| match channel.value_type {
+            ValueType::Int16 => register_list.push(channel.index),
+            ValueType::Real32 => {
+                register_list.push(channel.index);
+                register_list.push(channel.index + 1);
+            }
+            _ => {}
+        })
+        .collect();
+
+    let start = register_list.iter().min();
+    let end = register_list.iter().max();
+
+    let mut register_vec = Vec::new();
+    if let (Some(min), Some(max)) = (start, end) {
+        register_vec = (*min..=*max).collect();
+    }
+    register_vec
+}
+
+pub fn channel_values_from_buffer(
+    mut device: Device,
+    register_list: Vec<u16>,
+    data_buffer: Vec<u16>,
+) -> Device {
+    // We get the data as a u16 Vec and we assign each value to its corresponding channel.
+    if !data_buffer.is_empty() {
+        let mut channels_to_send = Vec::new();
+        for channel in device.channels {
+            let mut edited_channel = channel.clone();
+            for (i, register) in register_list.iter().enumerate() {
+                if edited_channel.enabled && edited_channel.index == *register {
+                    match edited_channel.value_type {
+                        ValueType::Int16 => {
+                            edited_channel.value = data_buffer[i] as f32;
+                        }
+                        ValueType::Real32 => {
+                            let data_32bit_rep =
+                                ((data_buffer[i] as u32) << 16) | data_buffer[i + 1] as u32;
+                            let data_32_array = data_32bit_rep.to_ne_bytes();
+                            edited_channel.value = f32::from_ne_bytes(data_32_array);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            channels_to_send.push(edited_channel);
+        }
+        device.channels = channels_to_send;
+    }
+    device
 }

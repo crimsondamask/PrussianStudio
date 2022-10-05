@@ -1,5 +1,5 @@
 use crate::{
-    app_threads::{spawn_device_thread, spawn_socket_recv},
+    app_threads::{spawn_device_thread, spawn_socket_recv, spawn_socket_write_msg},
     crossbeam::{CrossBeamChannel, CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
     fonts::*,
     setup_app::{setup_app_defaults, setup_visuals},
@@ -30,13 +30,6 @@ use url::Url;
 pub struct DataSerialized {
     pub devices: Vec<Device>,
 }
-#[derive(Deserialize, Clone, PartialEq)]
-pub struct JsonWriteChannel {
-    pub device_id: usize,
-    pub channel: usize,
-    pub value: f32,
-}
-
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
@@ -205,9 +198,9 @@ impl eframe::App for TemplateApp {
                 receive: socket_r,
             };
 
-            *socket_channel = Some(socket_channel_init.clone());
+            //*socket_channel = Some(socket_channel_init.clone());
 
-            spawn_socket_recv(socket_channel_init);
+            //spawn_socket_recv(socket_channel_init);
 
             for i in 0..(num_devices) {
                 let (device_msg_s, device_msg_r): (
@@ -252,6 +245,7 @@ impl eframe::App for TemplateApp {
                     i,
                 );
             }
+            spawn_socket_write_msg(device_msg_beam.to_vec());
         }
         // --------------------------------
 
@@ -274,13 +268,7 @@ impl eframe::App for TemplateApp {
 
             plc_channels_window(windows_open, ctx, devices, channel_windows_buffer);
 
-            write_channel_value_ui(
-                windows_open,
-                ctx,
-                channel_windows_buffer,
-                devices,
-                device_beam,
-            );
+            write_channel_value_ui(windows_open, ctx, channel_windows_buffer, device_msg_beam);
 
             preferences_ui(windows_open, ctx);
 
@@ -323,8 +311,8 @@ fn write_channel_value_ui(
     windows_open: &mut WindowsOpen,
     ctx: &egui::Context,
     channel_windows_buffer: &mut ChannelWindowsBuffer,
-    devices: &mut Vec<Device>,
-    device_beam: &mut Vec<DeviceBeam>,
+    //devices: &mut Vec<Device>,
+    device_msg_beam: &mut Vec<DeviceMsgBeam>,
 ) {
     Window::new("Write Value")
         .open(&mut windows_open.channel_write_value)
@@ -339,15 +327,22 @@ fn write_channel_value_ui(
                         [channel_windows_buffer.selected_channel.id]
                         .parse::<f32>()
                     {
-                        devices[channel_windows_buffer.device_id].channels
-                            [channel_windows_buffer.selected_channel.id]
-                            .value = value;
+                        //devices[channel_windows_buffer.device_id].channels
+                        //  [channel_windows_buffer.selected_channel.id]
+                        //.value = value;
 
-                        if let Some(device_beam) =
-                            device_beam.iter().nth(channel_windows_buffer.device_id)
+                        if let Some(device_msg_beam) =
+                            device_msg_beam.iter().nth(channel_windows_buffer.device_id)
                         {
-                            if let Some(updated_channel) = device_beam.update.clone() {
-                                if let Ok(_) = updated_channel.send.send(devices.to_vec()) {}
+                            let channel_to_write = JsonWriteChannel {
+                                device_id: channel_windows_buffer.device_id,
+                                channel: channel_windows_buffer.selected_channel.id,
+                                value,
+                            };
+                            if let Ok(_) = device_msg_beam
+                                .send
+                                .send(DeviceMsg::WriteChannel(channel_to_write))
+                            {
                             }
                         }
                     }

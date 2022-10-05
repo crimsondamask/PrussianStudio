@@ -1,13 +1,13 @@
 // use std::error::Error;
 
-use std::fmt::{write, Display};
+use std::fmt::Display;
 
 mod alarm;
 use alarm::*;
 use serde::{Deserialize, Serialize};
 use tokio_modbus::prelude::{sync::Context, *};
 
-use crate::LoggerChannel;
+//use crate::LoggerChannel;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 pub enum ValueType {
@@ -34,10 +34,12 @@ pub struct Channel {
     pub tag: String,
     pub value_type: ValueType,
     pub access_type: AccessType,
+    pub to_write: bool,
     pub value: f32,
     pub index: u16,
     pub status: String,
     pub alarm: ChannelAlarm,
+    pub enabled: bool,
 }
 
 impl Channel {
@@ -47,9 +49,11 @@ impl Channel {
         value_type: ValueType,
         access_type: AccessType,
         index: u16,
+        to_write: bool,
         tag: String,
         status: String,
         alarm: ChannelAlarm,
+        enabled: bool,
     ) -> Self {
         let value = 0.0;
         Self {
@@ -59,9 +63,11 @@ impl Channel {
             value_type,
             access_type,
             value,
+            to_write,
             index,
             status,
             alarm,
+            enabled,
         }
     }
     pub fn read_value(&mut self, ctx: &mut Context) {
@@ -160,8 +166,10 @@ impl Default for Channel {
             value_type: ValueType::Int16,
             access_type: AccessType::Read,
             value: 0.0,
+            to_write: true,
             index: 0,
             status: "Initialized".to_owned(),
+            enabled: false,
             alarm: ChannelAlarm {
                 high: Alarm {
                     alarm_type: AlarmType::High,

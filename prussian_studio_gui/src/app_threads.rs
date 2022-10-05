@@ -1,6 +1,10 @@
 use crate::crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam};
-use lib_device::{get_register_list, AccessType, Device, DeviceMsg};
+use lib_device::{
+    channel_values_from_buffer, get_register_list, AccessType, Channel, Device, DeviceMsg,
+    JsonWriteChannel, ValueType,
+};
 use std::{thread, time::Duration};
+use tokio_modbus::prelude::{SyncReader, SyncWriter};
 use tungstenite::connect;
 use url::Url;
 
@@ -69,14 +73,54 @@ pub fn start_device_poll_loop(
                         ctx = ctx_update;
                     }
                 }
+                DeviceMsg::WriteChannel(channel_to_write) => {
+                    let channel = &devices_to_read[i].channels[channel_to_write.channel];
+                    match channel.value_type {
+                        ValueType::Int16 => {
+                            if let Ok(_) = ctx
+                                .write_single_register(channel.index, channel_to_write.value as u16)
+                            {
+                            }
+                        }
+                        ValueType::Real32 => {
+                            if let Ok(_) = ctx.write_single_register(
+                                // TODO
+                                channel.index,
+                                channel_to_write.value as u16,
+                            ) {}
+                        }
+                        ValueType::BoolType => {
+                            let coil_value = match channel_to_write.value as u16 {
+                                1 => true,
+                                _ => false,
+                            };
+                            if let Ok(_) = ctx.write_single_coil(channel.index, coil_value) {}
+                        }
+                    }
+                }
             }
         }
 
-        let (_, reg_list) = get_register_list(&devices_to_read[i]);
-        println!("{:?}", reg_list);
+        let reg_list = get_register_list(&devices_to_read[i]);
+
         // We poll data from the device and send it to the main GUI thread.
-        let channels = devices_to_read[i].channels.clone();
-        let mut channels_to_send = Vec::with_capacity(channels.len());
+
+        //let channels = devices_to_read[i].channels.clone();
+        //let mut channels_to_send = Vec::with_capacity(channels.len());
+
+        let mut read_buffer: Vec<u16> = Vec::new();
+
+        if let Some(start_register) = reg_list.iter().nth(0) {
+            if let Ok(data) = ctx.read_holding_registers(*start_register, reg_list.len() as u16) {
+                read_buffer = data;
+            }
+        }
+
+        devices_to_read[i] =
+            channel_values_from_buffer(devices_to_read[i].clone(), reg_list, read_buffer);
+
+        // To change.============================================
+        /*
         for mut channel in channels.clone() {
             match channel.access_type {
                 AccessType::Read => {
@@ -93,6 +137,8 @@ pub fn start_device_poll_loop(
             channels_to_send.push(channel);
         }
         devices_to_read[i].channels = channels_to_send;
+        */
+        // ======================================================
 
         // Send the read data to the main GUI thread.
         if let Some(crossbeam_channel) = device_beam.read.clone() {
@@ -110,6 +156,32 @@ pub fn spawn_socket_recv(socket_channel: CrossBeamSocketChannel) {
                 if let Ok(msg) = socket.read_message() {
                     if let Ok(json_write_channel) = serde_json::from_str(msg.to_text().unwrap()) {
                         if socket_channel.send.send(json_write_channel).is_ok() {
+                            println!("Channel serialized!");
+                        }
+                    }
+                } else {
+                    if let Ok((socket_reconn, _)) =
+                        connect(Url::parse("wss://localhost:8080/socket").unwrap())
+                    {
+                        socket = socket_reconn;
+                    }
+                }
+            }
+        };
+    });
+}
+pub fn spawn_socket_write_msg(device_msg_beams: Vec<DeviceMsgBeam>) {
+    thread::spawn(move || {
+        if let Ok((mut socket, _)) = connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
+            loop {
+                if let Ok(msg) = socket.read_message() {
+                    if let Ok(json_write_channel) = serde_json::from_str(msg.to_text().unwrap()) {
+                        let channel: JsonWriteChannel = json_write_channel;
+                        if device_msg_beams[channel.device_id]
+                            .send
+                            .send(DeviceMsg::WriteChannel(channel))
+                            .is_ok()
+                        {
                             println!("Channel serialized!");
                         }
                     }
