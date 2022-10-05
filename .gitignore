@@ -1,4 +1,4 @@
 /target
 /Cargo.lock
 ./prussian_studio_gui/docs/*
-*.pfx
+./prussian_studio_server/identity.pfx
