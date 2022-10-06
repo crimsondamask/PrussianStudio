@@ -1,5 +1,5 @@
 use crate::{
-    app_threads::{spawn_device_thread, spawn_socket_recv, spawn_socket_write_msg},
+    app_threads::{spawn_device_thread, spawn_socket_write_msg},
     crossbeam::{CrossBeamChannel, CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
     fonts::*,
     setup_app::{setup_app_defaults, setup_visuals},
@@ -21,7 +21,7 @@ pub use lib_logger::{parse_pattern, Logger, LoggerType};
 use egui::Window;
 use regex::Regex;
 use serde::Serialize;
-use std::net::TcpStream;
+use std::{net::TcpStream, path::PathBuf};
 use tungstenite::{connect, stream::MaybeTlsStream};
 use tungstenite::{Message, WebSocket};
 use url::Url;
@@ -33,6 +33,8 @@ pub struct DataSerialized {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
+    #[serde(skip)]
+    pub config_save_path: PathBuf,
     #[serde(skip)]
     pub status: Status,
     pub logger_window_buffer: LoggerWindowBuffer,
@@ -118,6 +120,7 @@ impl eframe::App for TemplateApp {
             socket,
             re,
             svg_logo,
+            config_save_path,
             ..
         } = self;
 
@@ -148,17 +151,7 @@ impl eframe::App for TemplateApp {
         }
         // --------------------------------
 
-        let data_to_serialize = DataSerialized {
-            devices: devices.clone(),
-        };
-        // We send the data over the web socket to the HMI and update our status.
-        status.websocket = match send_over_socket(socket, &data_to_serialize) {
-            Ok(_) => "Connected to WebSocket.".to_owned(),
-            Err(e) => {
-                *socket = None;
-                format!("ERROR: {}", e)
-            }
-        };
+        send_to_server(devices, status, socket);
 
         // --------------------------------
         // We check if there is any write request from the HMI
@@ -286,8 +279,10 @@ impl eframe::App for TemplateApp {
                 windows_open,
                 device_windows_buffer,
                 devices,
+                loggers,
                 channel_windows_buffer,
                 spawn_logging_thread,
+                config_save_path,
             );
 
             plc_channels_window(windows_open, ctx, devices, channel_windows_buffer);
@@ -329,6 +324,24 @@ impl eframe::App for TemplateApp {
         left_panel(ctx, self);
         central_panel(ctx, self);
     }
+}
+
+fn send_to_server(
+    devices: &mut Vec<Device>,
+    status: &mut Status,
+    socket: &mut Option<WebSocket<MaybeTlsStream<TcpStream>>>,
+) {
+    let data_to_serialize = DataSerialized {
+        devices: devices.clone(),
+    };
+    // We send the data over the web socket to the HMI and update our status.
+    status.websocket = match send_over_socket(socket, &data_to_serialize) {
+        Ok(_) => "Connected to WebSocket.".to_owned(),
+        Err(e) => {
+            *socket = None;
+            format!("ERROR: {}", e)
+        }
+    };
 }
 
 fn write_channel_value_ui(
@@ -383,7 +396,7 @@ fn preferences_ui(windows_open: &mut WindowsOpen, ctx: &egui::Context) {
         });
 }
 
-fn send_over_socket(
+pub fn send_over_socket(
     socket: &mut Option<WebSocket<MaybeTlsStream<TcpStream>>>,
     data: &DataSerialized,
 ) -> anyhow::Result<()> {

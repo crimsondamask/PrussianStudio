@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use egui::{Color32, Rounding};
 use extras::RetainedImage;
 use lib_device::Device;
@@ -45,6 +47,7 @@ pub fn setup_app_defaults() -> TemplateApp {
         svg_logo: RetainedImage::from_svg_bytes("svg_logo.svg", include_bytes!("svg_logo.svg"))
             .unwrap(),
         allow_exit: false,
+        config_save_path: PathBuf::from("."),
     }
 }
 

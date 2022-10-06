@@ -1,4 +1,7 @@
-use crate::crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam};
+use crate::{
+    app::DataSerialized,
+    crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
+};
 use lib_device::{
     channel_values_from_buffer, get_register_list, AccessType, Channel, Device, DeviceMsg,
     JsonWriteChannel, ValueType,
@@ -144,6 +147,7 @@ pub fn start_device_poll_loop(
         if let Some(crossbeam_channel) = device_beam.read.clone() {
             if let Ok(_) = crossbeam_channel.send.send(devices_to_read.clone()) {}
         }
+
         // The thread sleeps.
         thread::sleep(Duration::from_secs(devices_to_read[i].scan_rate));
     }

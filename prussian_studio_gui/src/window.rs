@@ -16,6 +16,8 @@ pub struct WindowsOpen {
     pub device_channels_vec: [bool; 10],
     pub channel_write_value: bool,
     pub logger_configure: bool,
+    pub save_config: bool,
+    pub load_config: bool,
     pub confirm_exit: bool,
 }
 #[derive(Default, Serialize, Deserialize)]

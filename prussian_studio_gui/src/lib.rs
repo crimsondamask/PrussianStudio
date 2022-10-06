@@ -2,6 +2,7 @@
 
 mod app;
 mod app_threads;
+mod config;
 mod crossbeam;
 mod fonts;
 mod setup_app;

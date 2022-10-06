@@ -35,6 +35,7 @@ rfd = "0.10.0"
 tokio-serial = "5.4.3"
 tokio-modbus = { version = "0.5.3", features = ["rtu"] }
 anyhow = "1.0.62"
+ron = "0.8.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
