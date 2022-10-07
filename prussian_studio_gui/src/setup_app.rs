@@ -8,6 +8,7 @@ use tungstenite::connect;
 use url::Url;
 
 use crate::{
+    app::URL,
     status::Status,
     window::{ChannelWindowsBuffer, DeviceWindowsBuffer, LoggerWindowBuffer, WindowsOpen},
     TemplateApp,
@@ -15,7 +16,7 @@ use crate::{
 const NUM_CHANNELS: usize = 20;
 
 pub fn setup_app_defaults() -> TemplateApp {
-    let socket = match connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
+    let socket = match connect(Url::parse(URL).unwrap()) {
         Ok((socket, _)) => Some(socket),
         Err(_) => None,
     };

@@ -25,7 +25,7 @@ use std::{net::TcpStream, path::PathBuf};
 use tungstenite::{connect, stream::MaybeTlsStream};
 use tungstenite::{Message, WebSocket};
 use url::Url;
-
+pub const URL: &str = "ws://127.0.0.1:3000/websocket";
 #[derive(Serialize, Clone)]
 pub struct DataSerialized {
     pub devices: Vec<Device>,
@@ -130,9 +130,7 @@ impl eframe::App for TemplateApp {
         // there is no cnx established.
 
         if !socket.is_some() {
-            if let Ok((socket_conn, _)) =
-                connect(Url::parse("wss://localhost:8080/socket").unwrap())
-            {
+            if let Ok((socket_conn, _)) = connect(Url::parse(URL).unwrap()) {
                 *socket = Some(socket_conn);
             }
         }
@@ -145,13 +143,13 @@ impl eframe::App for TemplateApp {
                 if let Some(devices_received) = crossbeam.read.clone() {
                     if let Ok(device_received) = devices_received.receive.try_recv() {
                         devices[i] = device_received[i].clone();
+                        // We only send data to the server when there is a new update to avoid overworking it.
+                        send_to_server(devices, status, socket);
                     }
                 }
             }
         }
         // --------------------------------
-
-        send_to_server(devices, status, socket);
 
         // --------------------------------
         // We check if there is any write request from the HMI

@@ -1,5 +1,5 @@
 use crate::{
-    app::DataSerialized,
+    app::{DataSerialized, URL},
     crossbeam::{CrossBeamSocketChannel, DeviceBeam, DeviceMsgBeam},
 };
 use lib_device::{
@@ -155,7 +155,7 @@ pub fn start_device_poll_loop(
 
 pub fn spawn_socket_recv(socket_channel: CrossBeamSocketChannel) {
     thread::spawn(move || {
-        if let Ok((mut socket, _)) = connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
+        if let Ok((mut socket, _)) = connect(Url::parse(URL).unwrap()) {
             loop {
                 if let Ok(msg) = socket.read_message() {
                     if let Ok(json_write_channel) = serde_json::from_str(msg.to_text().unwrap()) {
@@ -164,9 +164,7 @@ pub fn spawn_socket_recv(socket_channel: CrossBeamSocketChannel) {
                         }
                     }
                 } else {
-                    if let Ok((socket_reconn, _)) =
-                        connect(Url::parse("wss://localhost:8080/socket").unwrap())
-                    {
+                    if let Ok((socket_reconn, _)) = connect(Url::parse(URL).unwrap()) {
                         socket = socket_reconn;
                     }
                 }
@@ -176,7 +174,7 @@ pub fn spawn_socket_recv(socket_channel: CrossBeamSocketChannel) {
 }
 pub fn spawn_socket_write_msg(device_msg_beams: Vec<DeviceMsgBeam>) {
     thread::spawn(move || {
-        if let Ok((mut socket, _)) = connect(Url::parse("wss://localhost:8080/socket").unwrap()) {
+        if let Ok((mut socket, _)) = connect(Url::parse(URL).unwrap()) {
             loop {
                 if let Ok(msg) = socket.read_message() {
                     if let Ok(json_write_channel) = serde_json::from_str(msg.to_text().unwrap()) {
@@ -185,14 +183,10 @@ pub fn spawn_socket_write_msg(device_msg_beams: Vec<DeviceMsgBeam>) {
                             .send
                             .send(DeviceMsg::WriteChannel(channel))
                             .is_ok()
-                        {
-                            println!("Channel serialized!");
-                        }
+                        {}
                     }
                 } else {
-                    if let Ok((socket_reconn, _)) =
-                        connect(Url::parse("wss://localhost:8080/socket").unwrap())
-                    {
+                    if let Ok((socket_reconn, _)) = connect(Url::parse(URL).unwrap()) {
                         socket = socket_reconn;
                     }
                 }
