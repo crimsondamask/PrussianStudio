@@ -16,3 +16,5 @@ tower = { version = "0.4", features = ["util"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.1.2", features = ["v4"] }
+colored = "2.0.0"
+chrono = "0.4.22"

@@ -1,18 +1,22 @@
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::State,
+    http::StatusCode,
     response::IntoResponse,
-    routing::get,
+    routing::{get, get_service},
     Router,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use std::{
     collections::HashSet,
     net::SocketAddr,
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
+use tower_http::services::ServeDir;
 use uuid::Uuid;
 
+use colored::*;
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -42,11 +46,40 @@ async fn main() {
 
     let app_state = Arc::new(AppState { client_set, tx });
 
-    let app = Router::with_state(app_state).route("/websocket", get(ws_handler));
+    let static_dir = PathBuf::from(".").join("assets").join("HMI");
+
+    let app = Router::with_state(app_state)
+        .fallback_service(
+            get_service(ServeDir::new(static_dir).append_index_html_on_directories(true))
+                .handle_error(|error: std::io::Error| async move {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Unhandled internal error: {}", error),
+                    )
+                }),
+        )
+        .route("/websocket", get(ws_handler));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
     tracing::debug!("listening on {}", addr);
+    println!("{}", "Server is running...".bold());
+    println!(
+        "    => {} {}",
+        "address:".cyan(),
+        &addr.ip().to_string().bold()
+    );
+    println!(
+        "    => {} {}",
+        "port:".cyan(),
+        &addr.port().to_string().bold()
+    );
+    println!(
+        "    => {} http://{}:{}",
+        "link:".cyan(),
+        &addr.ip().to_string().bold(),
+        &addr.port().to_string().bold(),
+    );
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -63,7 +96,11 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
     //We check if the client is registered. We add it to the client set if not.
 
     if !is_registered(&state, &id) {
-        println!("{} is now registered!", &id);
+        println!(
+            "{} => {} is now registered.",
+            chrono::Local::now().to_string().dimmed().bold(),
+            &id.green().dimmed().bold()
+        );
     }
 
     // We split the stream to be able to receive and send.
@@ -123,9 +160,11 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
         _ = (&mut receive_task) => send_task.abort(),
     }
 
-    let msg = format!("{} left.", &id);
-    tracing::debug!("{}", msg);
-    println!("{}", msg);
+    println!(
+        "{} => {} left the session.",
+        chrono::Local::now().to_string().dimmed().bold(),
+        &id.green().dimmed().bold()
+    );
     // Remove client from map.
     state.client_set.lock().unwrap().remove(&id);
 }
