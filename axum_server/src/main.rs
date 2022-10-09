@@ -46,19 +46,23 @@ async fn main() {
 
     let app_state = Arc::new(AppState { client_set, tx });
 
-    let static_dir = PathBuf::from(".").join("assets").join("HMI");
+    let hmi_dir = PathBuf::from(".").join("assets").join("HMI");
+    let logger_dir = PathBuf::from(".").join("assets").join("logger");
+
+    let hmi_service = ServeDir::new(hmi_dir).append_index_html_on_directories(true);
+    let logger_service = ServeDir::new(logger_dir).append_index_html_on_directories(true);
 
     let app = Router::with_state(app_state)
-        .fallback_service(
-            get_service(ServeDir::new(static_dir).append_index_html_on_directories(true))
-                .handle_error(|error: std::io::Error| async move {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("Unhandled internal error: {}", error),
-                    )
-                }),
+        .route("/websocket", get(ws_handler))
+        .nest(
+            "/hmi/",
+            get_service(hmi_service.clone()).handle_error(handle_error),
         )
-        .route("/websocket", get(ws_handler));
+        .nest("/", get_service(hmi_service).handle_error(handle_error))
+        .nest(
+            "/logger/",
+            get_service(logger_service).handle_error(handle_error),
+        );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
@@ -85,6 +89,10 @@ async fn main() {
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+async fn handle_error(_err: std::io::Error) -> impl IntoResponse {
+    (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong...")
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
