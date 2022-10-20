@@ -67,23 +67,36 @@ async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
     tracing::debug!("listening on {}", addr);
-    println!("{}", "Server is running...".bold());
-    println!(
-        "    => {} {}",
-        "address:".cyan(),
-        &addr.ip().to_string().bold()
-    );
-    println!(
-        "    => {} {}",
-        "port:".cyan(),
-        &addr.port().to_string().bold()
-    );
-    println!(
-        "    => {} http://{}:{}",
-        "link:".cyan(),
-        &addr.ip().to_string().bold(),
-        &addr.port().to_string().bold(),
-    );
+
+    if cfg!(target_os = "windows") {
+        println!("{}", "Server is running...");
+        println!("    => {} {}", "address:", &addr.ip().to_string());
+        println!("    => {} {}", "port:", &addr.port().to_string());
+        println!(
+            "    => {} http://{}:{}",
+            "link:",
+            &addr.ip().to_string(),
+            &addr.port().to_string(),
+        );
+    } else {
+        println!("{}", "Server is running...".bold());
+        println!(
+            "    => {} {}",
+            "address:".cyan(),
+            &addr.ip().to_string().bold()
+        );
+        println!(
+            "    => {} {}",
+            "port:".cyan(),
+            &addr.port().to_string().bold()
+        );
+        println!(
+            "    => {} http://{}:{}",
+            "link:".cyan(),
+            &addr.ip().to_string().bold(),
+            &addr.port().to_string().bold(),
+        );
+    }
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -104,11 +117,19 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
     //We check if the client is registered. We add it to the client set if not.
 
     if !is_registered(&state, &id) {
-        println!(
-            "{} => {} is now registered.",
-            chrono::Local::now().to_string().dimmed().bold(),
-            &id.green().dimmed().bold()
-        );
+        if cfg!(target_os = "windows") {
+            println!(
+                "{} => {} is now registered.",
+                chrono::Local::now().to_string(),
+                &id
+            );
+        } else {
+            println!(
+                "{} => {} is now registered.",
+                chrono::Local::now().to_string().dimmed().bold(),
+                &id.green().dimmed().bold()
+            );
+        }
     }
 
     // We split the stream to be able to receive and send.
@@ -168,11 +189,19 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
         _ = (&mut receive_task) => send_task.abort(),
     }
 
-    println!(
-        "{} => {} left the session.",
-        chrono::Local::now().to_string().dimmed().bold(),
-        &id.green().dimmed().bold()
-    );
+    if cfg!(target_os = "windows") {
+        println!(
+            "{} => {} left the session.",
+            chrono::Local::now().to_string(),
+            &id
+        );
+    } else {
+        println!(
+            "{} => {} left the session.",
+            chrono::Local::now().to_string().dimmed().bold(),
+            &id.green().dimmed().bold()
+        );
+    }
     // Remove client from map.
     state.client_set.lock().unwrap().remove(&id);
 }
