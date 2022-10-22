@@ -7,6 +7,10 @@ use axum::{
     Router,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
+use lib_device::*;
+use serde::Deserialize;
+use serde_json::*;
+
 use std::{
     collections::HashSet,
     net::SocketAddr,
@@ -17,17 +21,16 @@ use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 use colored::*;
-use sqlx::{
-    migrate::MigrateDatabase,
-    sqlite::{SqliteConnectOptions, SqliteConnection, SqliteJournalMode, SqlitePoolOptions},
-    Sqlite, SqlitePool,
-};
-use std::str::FromStr;
+use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePoolOptions, Sqlite, SqlitePool};
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const DB_URI: &str = "sqlite://data.db";
-// use rusqlite::{Connection, Result};
+
+#[derive(Clone, Deserialize)]
+struct DeviceData {
+    devices: Vec<Device>,
+}
 
 #[derive(Clone)]
 struct Msg {
@@ -44,23 +47,34 @@ struct AppState {
 async fn main() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "example_chat=trace".into()),
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "prussian_server=trace".into()),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
 
     let client_set: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 
-    // let db_opts = SqliteConnectOptions::new()
-    //     .filename(DB_URI)
-    //     .create_if_missing(true);
-
     if !Sqlite::database_exists(DB_URI).await.unwrap_or(false) {
         Sqlite::create_database(DB_URI).await.unwrap();
     }
-    let db_pool = SqlitePoolOptions::new().connect(DB_URI).await.unwrap();
-    let query = "
-    CREATE TABLE IF NOT EXISTS clients (id TEXT NOT NULL);";
+    let db_pool = SqlitePoolOptions::new()
+        .connect(DB_URI)
+        .await
+        .expect("Couldn't connect to the database. The file might be corrupt.");
+    let query = r#"
+    CREATE TABLE IF NOT EXISTS Records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        datetime text NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS Data (
+        data_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        channel_id int NOT NULL,
+        device_id int NOT NULL,
+        value FLOAT(14, 4) NOT NULL,
+        record_id INTEGER,
+        FOREIGN KEY (record_id)
+            REFERENCES Records(id)
+    );"#;
 
     let result = sqlx::query(&query).execute(&db_pool).await.unwrap();
     println!("{:?}", result);
@@ -137,14 +151,13 @@ async fn handle_error(_err: std::io::Error) -> impl IntoResponse {
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let pool = &state.db_pool;
-    let query = "INSERT INTO clients (id) VALUES($1)";
+    // let pool = &state.db_pool;
+    // let query = "INSERT INTO clients (id) VALUES($1)";
     let id = Uuid::new_v4().to_string();
 
-    let result = sqlx::query(&query).bind(&id).execute(pool).await.unwrap();
+    // let result = sqlx::query(&query).bind(&id).execute(pool).await.unwrap();
 
-    pool.close().await;
-    println!("{:?}", result);
+    // println!("{:?}", result);
 
     ws.on_upgrade(|socket| websocket(socket, id, state))
 }
@@ -193,6 +206,7 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
     // We spawn a task that receives the socket msgs from our client and broadcasts them to other clients.
     let tx = state.tx.clone();
     let client_id = id.clone();
+    let db_pool_cloned = state.db_pool.clone();
 
     let mut receive_task = tokio::spawn(async move {
         while let Some(Ok(payload)) = receiver.next().await {
@@ -211,6 +225,11 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
                         client_id: client_id.clone(),
                         payload: text,
                     };
+                    // We log the data to the database.
+                    if let Ok(devices_data) = serde_json::from_str(&msg.payload) {
+                        let devices_to_log: DeviceData = devices_data;
+                        log_data(&db_pool_cloned, &devices_to_log).await;
+                    }
                     let _ = tx.send(msg);
                 }
                 _ => {}
@@ -239,7 +258,9 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
         );
     }
     // Remove client from map.
-    state.client_set.lock().unwrap().remove(&id);
+    if let Ok(mut client_handle) = state.client_set.lock() {
+        client_handle.remove(&id);
+    }
 }
 
 fn is_registered(state: &AppState, id: &str) -> bool {
@@ -250,5 +271,32 @@ fn is_registered(state: &AppState, id: &str) -> bool {
         false
     } else {
         true
+    }
+}
+
+async fn log_data(db_pool: &SqlitePool, data: &DeviceData) {
+    let datetime = chrono::Local::now();
+    let record_query = "INSERT INTO records (id, datetime) VALUES(NULL, $1)";
+    let result = sqlx::query(&record_query)
+        .bind(format!("{}", &datetime))
+        .execute(db_pool)
+        .await
+        .unwrap();
+    let row_id = &result.last_insert_rowid();
+
+    let data_query = "INSERT INTO data (data_id, channel_id, device_id, value, record_id) 
+                                    VALUES(NULL, $1, $2, $3, $4)";
+    for device in &data.devices {
+        for channel in &device.channels {
+            let _result = sqlx::query(&data_query)
+                .bind(channel.id as i32)
+                .bind(channel.device_id as i32)
+                .bind(channel.value)
+                .bind(row_id)
+                .execute(db_pool)
+                .await
+                .unwrap();
+            //println!("{:?}", &result);
+        }
     }
 }
