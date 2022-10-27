@@ -9,7 +9,8 @@ use axum::{
 use futures::{sink::SinkExt, stream::StreamExt};
 use lib_device::*;
 use serde::Deserialize;
-use serde_json::*;
+// use serde_json::*;
+use std::time::Instant;
 
 use std::{
     collections::HashSet,
@@ -26,6 +27,8 @@ use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const DB_URI: &str = "sqlite://data.db";
+// Duration in seconds between two separate logs.
+const LOG_RATE: u64 = 1;
 
 #[derive(Clone, Deserialize)]
 struct DeviceData {
@@ -39,8 +42,11 @@ struct Msg {
 }
 // The shared State
 struct AppState {
+    // A hashset to keep track of our connected clients.
     client_set: Mutex<HashSet<String>>,
+    // A channel sender contex that we use to communicate with the threads.
     tx: broadcast::Sender<Msg>,
+    // An SQLITE connection pool that we use to execute queries on the database.
     db_pool: SqlitePool,
 }
 #[tokio::main]
@@ -54,6 +60,7 @@ async fn main() {
 
     let client_set: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 
+    // We check if the database file exists, otherwise we create it.
     if !Sqlite::database_exists(DB_URI).await.unwrap_or(false) {
         Sqlite::create_database(DB_URI).await.unwrap();
     }
@@ -61,10 +68,12 @@ async fn main() {
         .connect(DB_URI)
         .await
         .expect("Couldn't connect to the database. The file might be corrupt.");
+
+    // We create the data tables inside the database if they don't exist.
     let query = r#"
     CREATE TABLE IF NOT EXISTS Records (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        datetime text NOT NULL
+        datetime INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS Data (
         data_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -82,6 +91,7 @@ async fn main() {
     // We create the channel that we will use to transfer messages between clients.
     let (tx, _rx) = broadcast::channel(3);
 
+    // and innitiate our AppState.
     let app_state = Arc::new(AppState {
         client_set,
         tx,
@@ -91,6 +101,7 @@ async fn main() {
     let hmi_dir = PathBuf::from(".").join("assets").join("HMI");
     let logger_dir = PathBuf::from(".").join("assets").join("logger");
 
+    // We serve the HMI as ServeDir service.
     let hmi_service = ServeDir::new(hmi_dir).append_index_html_on_directories(true);
     let logger_service = ServeDir::new(logger_dir).append_index_html_on_directories(true);
 
@@ -151,13 +162,7 @@ async fn handle_error(_err: std::io::Error) -> impl IntoResponse {
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    // let pool = &state.db_pool;
-    // let query = "INSERT INTO clients (id) VALUES($1)";
     let id = Uuid::new_v4().to_string();
-
-    // let result = sqlx::query(&query).bind(&id).execute(pool).await.unwrap();
-
-    // println!("{:?}", result);
 
     ws.on_upgrade(|socket| websocket(socket, id, state))
 }
@@ -209,6 +214,8 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
     let db_pool_cloned = state.db_pool.clone();
 
     let mut receive_task = tokio::spawn(async move {
+        // We use a timer
+        let mut time = Instant::now();
         while let Some(Ok(payload)) = receiver.next().await {
             match payload {
                 Message::Binary(payload) => {
@@ -227,8 +234,12 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
                     };
                     // We log the data to the database.
                     if let Ok(devices_data) = serde_json::from_str(&msg.payload) {
-                        let devices_to_log: DeviceData = devices_data;
-                        log_data(&db_pool_cloned, &devices_to_log).await;
+                        if time.elapsed().as_secs() >= LOG_RATE {
+                            let devices_to_log: DeviceData = devices_data;
+                            log_data(&db_pool_cloned, &devices_to_log).await;
+                            // And we reset the timer.
+                            time = Instant::now();
+                        }
                     }
                     let _ = tx.send(msg);
                 }
@@ -276,9 +287,10 @@ fn is_registered(state: &AppState, id: &str) -> bool {
 
 async fn log_data(db_pool: &SqlitePool, data: &DeviceData) {
     let datetime = chrono::Local::now();
+    let timestamp = datetime.timestamp();
     let record_query = "INSERT INTO records (id, datetime) VALUES(NULL, $1)";
     let result = sqlx::query(&record_query)
-        .bind(format!("{}", &datetime))
+        .bind(timestamp)
         .execute(db_pool)
         .await
         .unwrap();
