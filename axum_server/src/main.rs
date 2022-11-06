@@ -20,6 +20,8 @@ use colored::*;
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+// use rusqlite::{Connection, Result};
+
 #[derive(Clone)]
 struct Msg {
     client_id: String,

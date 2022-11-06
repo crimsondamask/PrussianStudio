@@ -20,11 +20,13 @@ pub use lib_logger::{parse_pattern, Logger, LoggerType};
 
 use egui::Window;
 use regex::Regex;
+use rhai::{Engine, EvalAltResult};
 use serde::Serialize;
 use std::{net::TcpStream, path::PathBuf};
 use tungstenite::{connect, stream::MaybeTlsStream};
 use tungstenite::{Message, WebSocket};
 use url::Url;
+
 pub const URL: &str = "ws://127.0.0.1:3000/websocket";
 #[derive(Serialize, Clone)]
 pub struct DataSerialized {
@@ -33,6 +35,8 @@ pub struct DataSerialized {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
+    #[serde(skip)]
+    pub rhai_engine: Engine,
     #[serde(skip)]
     pub config_save_path: PathBuf,
     #[serde(skip)]
@@ -106,6 +110,7 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self {
+            rhai_engine,
             status,
             logger_window_buffer,
             device_windows_buffer,
@@ -123,6 +128,8 @@ impl eframe::App for TemplateApp {
             config_save_path,
             ..
         } = self;
+
+        // rhai_engine.run(r#"print("hello, world!")"#).unwrap();
 
         let num_devices = devices.len();
 
@@ -185,7 +192,7 @@ impl eframe::App for TemplateApp {
             *spawn_logging_thread = !*spawn_logging_thread;
             let devices_to_read = devices.clone();
 
-            let (socket_s, socket_r): (
+            let (_socket_s, _socket_r): (
                 crossbeam_channel::Sender<JsonWriteChannel>,
                 crossbeam_channel::Receiver<JsonWriteChannel>,
             ) = unbounded();

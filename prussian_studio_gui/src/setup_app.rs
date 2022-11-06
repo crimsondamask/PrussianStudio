@@ -4,6 +4,7 @@ use egui::{Color32, Rounding};
 use extras::RetainedImage;
 use lib_device::Device;
 use regex::Regex;
+use rhai::Engine;
 use tungstenite::connect;
 use url::Url;
 
@@ -22,6 +23,7 @@ pub fn setup_app_defaults() -> TemplateApp {
     };
     TemplateApp {
         // Example stuff:
+        rhai_engine: Engine::new(),
         status: Status::default(),
         logger_window_buffer: LoggerWindowBuffer::default(),
         device_windows_buffer: DeviceWindowsBuffer::default(),

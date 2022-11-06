@@ -1,9 +1,9 @@
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    extract::State,
+    extract::{Json, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, get_service},
+    routing::{get, get_service, post},
     Router,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
@@ -34,6 +34,8 @@ const LOG_RATE: u64 = 1;
 struct DeviceData {
     devices: Vec<Device>,
 }
+#[derive(Clone, Deserialize)]
+struct ExportOptions;
 
 #[derive(Clone)]
 struct Msg {
@@ -64,10 +66,13 @@ async fn main() {
     if !Sqlite::database_exists(DB_URI).await.unwrap_or(false) {
         Sqlite::create_database(DB_URI).await.unwrap();
     }
+
+    // We establish a connection pool with the database.
     let db_pool = SqlitePoolOptions::new()
         .connect(DB_URI)
         .await
-        .expect("Couldn't connect to the database. The file might be corrupt.");
+        // Panic on error with the message:
+        .expect("Something went wrong...");
 
     // We create the data tables inside the database if they don't exist.
     let query = r#"
@@ -107,6 +112,7 @@ async fn main() {
 
     let app = Router::with_state(app_state)
         .route("/websocket", get(ws_handler))
+        .route("/export", post(fetch_data))
         .nest(
             "/hmi/",
             get_service(hmi_service.clone()).handle_error(handle_error),
@@ -311,4 +317,10 @@ async fn log_data(db_pool: &SqlitePool, data: &DeviceData) {
             //println!("{:?}", &result);
         }
     }
+}
+
+async fn fetch_data(
+    Json(payload): Json<ExportOptions>,
+    // State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
 }
