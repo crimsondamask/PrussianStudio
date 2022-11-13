@@ -2,5 +2,4 @@
 /Cargo.lock
 ./prussian_studio_gui/docs/*
 ./prussian_studio_server/identity.pfx
-./server/certs/cert.pem
-./server/certs/key.rsa
+./server/certs/*
