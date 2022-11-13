@@ -1,9 +1,9 @@
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    extract::{Json, State},
+    extract::State,
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, get_service, post},
+    routing::{get, get_service},
     Router,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
@@ -112,7 +112,6 @@ async fn main() {
 
     let app = Router::with_state(app_state)
         .route("/websocket", get(ws_handler))
-        .route("/export", post(fetch_data))
         .nest(
             "/hmi/",
             get_service(hmi_service.clone()).handle_error(handle_error),
@@ -241,8 +240,8 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
                     // We log the data to the database.
                     if let Ok(devices_data) = serde_json::from_str(&msg.payload) {
                         if time.elapsed().as_secs() >= LOG_RATE {
-                            let devices_to_log: DeviceData = devices_data;
-                            log_data(&db_pool_cloned, &devices_to_log).await;
+                            let _devices_to_log: DeviceData = devices_data;
+                            //log_data(&db_pool_cloned, &devices_to_log).await;
                             // And we reset the timer.
                             time = Instant::now();
                         }
@@ -317,10 +316,4 @@ async fn log_data(db_pool: &SqlitePool, data: &DeviceData) {
             //println!("{:?}", &result);
         }
     }
-}
-
-async fn fetch_data(
-    Json(payload): Json<ExportOptions>,
-    // State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
 }
