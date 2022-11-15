@@ -27,7 +27,7 @@ use tungstenite::{connect, stream::MaybeTlsStream};
 use tungstenite::{Message, WebSocket};
 use url::Url;
 
-pub const URL: &str = "ws://127.0.0.1:3000/websocket";
+pub const URL: &str = "wss://127.0.0.1:3000/websocket";
 #[derive(Serialize, Clone)]
 pub struct DataSerialized {
     pub devices: Vec<Device>,

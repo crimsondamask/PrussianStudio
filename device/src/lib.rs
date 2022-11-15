@@ -1,3 +1,4 @@
+mod allen_bradley;
 mod calculation;
 mod channel;
 mod config;
@@ -6,6 +7,7 @@ mod modbus;
 
 use std::{error::Error, fmt::Display};
 
+pub use allen_bradley::*;
 pub use calculation::*;
 pub use channel::*;
 pub use config::*;

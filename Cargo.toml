@@ -6,7 +6,6 @@ members = [
   "./server",
   "./image",
   "./logger",
-  "./prussian_studio_server/",
   "./egui_extras",
 ]
 

@@ -2,10 +2,11 @@ use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::State,
     http::StatusCode,
-    response::IntoResponse,
+    response::{Html, IntoResponse},
     routing::{get, get_service},
     Router,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use futures::{sink::SinkExt, stream::StreamExt};
 use lib_device::*;
 use serde::Deserialize;
@@ -59,6 +60,17 @@ async fn main() {
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    let config = RustlsConfig::from_pem_file(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("certs")
+            .join("cert.pem"),
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("certs")
+            .join("key.pem"),
+    )
+    .await
+    .unwrap();
 
     let client_set: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 
@@ -117,6 +129,7 @@ async fn main() {
             get_service(hmi_service.clone()).handle_error(handle_error),
         )
         .nest("/", get_service(hmi_service).handle_error(handle_error))
+        .route("/test", get(test))
         .nest(
             "/logger/",
             get_service(logger_service).handle_error(handle_error),
@@ -157,6 +170,7 @@ async fn main() {
     }
 
     axum::Server::bind(&addr)
+        // axum_server::bind_rustls(addr, config)
         .serve(app.into_make_service())
         .await
         .unwrap();
@@ -164,6 +178,10 @@ async fn main() {
 
 async fn handle_error(_err: std::io::Error) -> impl IntoResponse {
     (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong...")
+}
+
+async fn test() -> Html<&'static str> {
+    Html("<h1>Hello, World!</h1>")
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
