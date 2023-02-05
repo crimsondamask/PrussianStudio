@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 lib_device = { path = "../device" }
+dashboard = { path = "../dashboard" }
 axum = { version = "0.6.0-rc.1", features = ["ws", "headers"] }
 axum-server = { version = "0.3", features = ["tls-rustls"] }
 headers = "0.3"

@@ -3,6 +3,7 @@
 members = [
   "./prussian_studio_gui",
   "./device",
+  "./dashboard",
   "./server",
   "./image",
   "./logger",

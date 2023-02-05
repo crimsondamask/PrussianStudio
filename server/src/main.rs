@@ -7,10 +7,11 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
+use dashboard::{DashBoardData, DataPoint, DataRecords};
 use futures::{sink::SinkExt, stream::StreamExt};
 use lib_device::*;
-use serde::Deserialize;
-// use serde_json::*;
+use serde::{Deserialize, Serialize};
+use serde_json::*;
 use std::time::Instant;
 
 use std::{
@@ -29,9 +30,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 const DB_URI: &str = "sqlite://data.db";
 // Duration in seconds between two separate logs.
-const LOG_RATE: u64 = 1;
+const LOG_RATE: u64 = 5;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 struct DeviceData {
     devices: Vec<Device>,
 }
@@ -60,17 +61,6 @@ async fn main() {
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
-
-    let config = RustlsConfig::from_pem_file(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("certs")
-            .join("cert.pem"),
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("certs")
-            .join("key.pem"),
-    )
-    .await
-    .unwrap();
 
     let client_set: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 
@@ -258,12 +248,22 @@ async fn websocket(stream: WebSocket, id: String, state: Arc<AppState>) {
                     // We log the data to the database.
                     if let Ok(devices_data) = serde_json::from_str(&msg.payload) {
                         if time.elapsed().as_secs() >= LOG_RATE {
-                            let _devices_to_log: DeviceData = devices_data;
-                            //log_data(&db_pool_cloned, &devices_to_log).await;
+                            let devices_to_log: DeviceData = devices_data;
+                            log_data(&db_pool_cloned, &devices_to_log).await;
                             // And we reset the timer.
                             time = Instant::now();
+
+                            let trends = device_to_dashboard(&devices_to_log);
+                            if let Ok(json) = serde_json::to_string(&trends) {
+                                let msg = Msg {
+                                    client_id: client_id.clone(),
+                                    payload: json,
+                                };
+                                let _h = tx.send(msg.clone());
+                            }
                         }
                     }
+
                     let _ = tx.send(msg);
                 }
                 _ => {}
@@ -334,4 +334,29 @@ async fn log_data(db_pool: &SqlitePool, data: &DeviceData) {
             //println!("{:?}", &result);
         }
     }
+}
+
+fn device_to_dashboard(data: &DeviceData) -> DashBoardData {
+    let mut records = DataRecords {
+        records: Vec::new(),
+    };
+
+    for device in &data.devices {
+        for channel in &device.channels {
+            let record = DataPoint {
+                id: channel.id,
+                tag: channel.clone().tag,
+                device: channel.device_id,
+                value: channel.value,
+                unit: channel.clone().tag,
+            };
+            records.records.push(record);
+        }
+    }
+
+    let dashboard_data = DashBoardData {
+        data: records,
+        timestamp: chrono::Local::now().timestamp(),
+    };
+    dashboard_data
 }

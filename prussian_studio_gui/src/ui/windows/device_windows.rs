@@ -179,6 +179,101 @@ pub fn plc_channels_window(
         });
 }
 
+pub fn calculations_window(
+    windows_open: &mut WindowsOpen,
+    ctx: &egui::Context,
+    devices: &mut Vec<Device>,
+    calculations_windows_buffer: &mut ChannelWindowsBuffer,
+) {
+    Window::new("PLC Channels")
+        .open(&mut windows_open.device_channels)
+        .scroll2([true, true])
+        .show(ctx, |ui| {
+            Grid::new("Channel List")
+                .striped(true)
+                .num_columns(9)
+                .min_col_width(160.0)
+                .show(ui, |ui| {
+                    if let Some(device) = &devices.iter().nth(calculations_windows_buffer.device_id)
+                    {
+                        ui.label(format!("{}", &device));
+                        ui.label("Device status:");
+                        ui.label(format!("{}", &device.status));
+
+                        ui.end_row();
+                        ui.separator();
+                        ui.end_row();
+                        ui.label("Channel");
+                        ui.label("Value");
+                        ui.label("Alarm");
+                        ui.label("Tag");
+                        ui.label("Value type");
+                        ui.label("Access");
+                        ui.label("Address");
+                        ui.label("Device");
+                        ui.label("Status");
+                        ui.end_row();
+                        for _ in 0..9 {
+                            ui.separator();
+                        }
+                        ui.end_row();
+                        for channel in device.channels.clone() {
+                            let button = Button::new(format!("Calc{}", channel.id)).frame(true);
+                            if ui.add(button).clicked() {
+                                calculations_windows_buffer.selected_channel = channel.clone();
+                                windows_open.channel_config = !windows_open.channel_config;
+                                calculations_windows_buffer.edited_channel =
+                                    calculations_windows_buffer.selected_channel.clone();
+                            }
+                            // ui.label(format!("CH{}", channel.id));
+                            if channel.enabled {
+                                match channel.access_type {
+                                    AccessType::Write => {
+                                        ui.horizontal(|ui| {
+                                            ui.label(format!("{:.2}", channel.value));
+                                            if ui.button("Write").clicked() {
+                                                calculations_windows_buffer.selected_channel =
+                                                    channel.clone();
+
+                                                windows_open.channel_write_value =
+                                                    !windows_open.channel_write_value;
+                                            }
+                                        });
+                                    }
+                                    AccessType::Read => {
+                                        ui.label(format!("{:.2}", channel.value));
+                                    }
+                                };
+                            } else {
+                                ui.label("Disabled.");
+                            }
+                            let mut alarm = "";
+                            if channel.alarm.low.active {
+                                alarm = "LOW ALARM";
+                            }
+
+                            if channel.alarm.high.active {
+                                alarm = "HIGH ALARM";
+                            }
+                            if channel.alarm.low.active && channel.alarm.high.active {
+                                alarm = "LOW ALARM/HIGH ALARM";
+                            }
+
+                            ui.colored_label(Color32::RED, alarm);
+
+                            ui.label(format!("{}", channel.tag));
+                            ui.label(format!("{}", channel.value_type));
+                            ui.label(format!("{}", channel.access_type));
+                            ui.label(format!("{}", channel.index));
+                            ui.label(format!("{}", channel.device_id));
+                            ui.label(format!("{}", channel.status));
+                            // if ui.small_button("Configure").clicked() {}
+                            ui.end_row();
+                        }
+                    }
+                });
+        });
+}
 pub fn channel_config_window(
     windows_open: &mut WindowsOpen,
     ctx: &egui::Context,
